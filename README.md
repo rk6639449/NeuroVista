@@ -57,8 +57,9 @@ this environment), plus the `voxelmorph` package from the previous section.
 
 ### Sample cases (one click)
 
-The **Step 1** screen lists ready-to-run samples (Sample_1 … Sample_4) — real ReMIND
-patients that have expert tumour masks in `masks_test/`. Clicking a card loads the scans,
+The **Step 1** screen lists ready-to-run samples (Sample_1 … Sample_3) — real ReMIND
+patients that have expert tumour masks in `masks_test/` (ReMIND-002 is hidden from the
+catalogue via `SAMPLE_EXCLUDE` in `webapp/server.py`). Clicking a card loads the scans,
 attaches the ground-truth segmentation (`dataset` engine), runs segment → register →
 relocate, and lands on the **Tumour relocation showcase**: a drag-to-compare wipe view
 (initial plan vs. after-shift), a Δ-vector arrow, pulsing centroid, animated KPIs

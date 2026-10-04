@@ -406,6 +406,8 @@ def view(sid: str, kind: str, plane: str = 'axial', idx: int = 0) -> Response:
 # --------------------------------------------------------------------------
 SAMPLES_CACHE: list | None = None
 REMIND_ROOT = Path(__file__).resolve().parents[1] / 'remind-nifti'
+# Patients hidden from the one-click sample catalogue (data still usable via upload).
+SAMPLE_EXCLUDE = {'ReMIND-002'}
 
 
 def _list_samples() -> list:
@@ -417,6 +419,8 @@ def _list_samples() -> list:
     samples = []
     for patient_dir in sorted(REMIND_ROOT.glob('ReMIND-*')):
         patient = patient_dir.name
+        if patient in SAMPLE_EXCLUDE:
+            continue
         preop = sorted((patient_dir / 'Preop').glob('*postcontrast*.nii*'))
         intra = sorted((patient_dir / 'Intraop').glob('*.nii*'))
         if not preop or not intra or not (seg.MASKS_ROOT / patient).is_dir():
