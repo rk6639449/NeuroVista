@@ -1,0 +1,25 @@
+{
+	"Modality": "MR",
+	"ManufacturersModelName": "Unknown model",
+	"PatientPosition": "HFS",
+	"StudyDescription": "Intraop",
+	"SeriesDescription": "3D_AX_T1_postcontrast",
+	"ProtocolName": "3D_AX_T1_postcontrast",
+	"ScanningSequence": "RM",
+	"SequenceVariant": "NONE",
+	"ImageType": ["ORIGINAL", "PRIMARY", "MPR"],
+	"DeidentificationMethod": ["PyDeface-NiftyReg", "Per DICOM PS 3.15 AnnexE. Details in 0012,0064"],
+	"SeriesNumber": 5,
+	"SliceThickness": 1.2,
+	"SpacingBetweenSlices": 1,
+	"ReconMatrixPE": 256,
+	"ImageOrientationPatientDICOM": [
+		-0.999745,
+		-0.0124042,
+		-0.0188577,
+		-0.0205589,
+		0.845282,
+		0.533925	],
+	"ConversionSoftware": "dcm2niix",
+	"ConversionSoftwareVersion": "v1.0.20260416"
+}

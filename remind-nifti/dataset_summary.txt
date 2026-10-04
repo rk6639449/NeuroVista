@@ -1,0 +1,544 @@
+==================================================
+          COMPLETE DATASET FILE LISTING           
+==================================================
+
+Subject: ReMIND-002
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_7.json
+    └── 3D_AX_T1_postcontrast_7.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_1.json
+    ├── 3D_AX_T1_postcontrast_1.nii
+    ├── 3D_AX_T1_postcontrast_1.nii.gz
+    ├── code.py
+    ├── resampled_to_fixed.nii
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-004
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_4.json
+    └── 3D_AX_T1_postcontrast_4.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_1.json
+    ├── 3D_AX_T1_postcontrast_1.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-007
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_2.json
+    ├── 3D_AX_T1_postcontrast_2.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-008
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_2.json
+    ├── 3D_AX_T1_postcontrast_2.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-010
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_2.json
+    ├── 3D_AX_T1_postcontrast_2.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-014
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_3.json
+    ├── 3D_AX_T1_postcontrast_3.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-015
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_6.json
+    └── 3D_AX_T1_postcontrast_6.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_3.json
+    ├── 3D_AX_T1_postcontrast_3.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-016
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_2.json
+    ├── 3D_AX_T1_postcontrast_2.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-017
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_3.json
+    ├── 3D_AX_T1_postcontrast_3.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-018
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_2.json
+    ├── 3D_AX_T1_postcontrast_2.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-019
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_6.json
+    └── 3D_AX_T1_postcontrast_6.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_3.json
+    ├── 3D_AX_T1_postcontrast_3.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-020
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_6.json
+    └── 3D_AX_T1_postcontrast_6.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_1.json
+    ├── 3D_AX_T1_postcontrast_1.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-022
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_1.json
+    ├── 3D_AX_T1_postcontrast_1.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-024
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_3.json
+    ├── 3D_AX_T1_postcontrast_3.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-028
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_6.json
+    └── 3D_AX_T1_postcontrast_6.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_2.json
+    ├── 3D_AX_T1_postcontrast_2.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-029
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_3.json
+    ├── 3D_AX_T1_postcontrast_3.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-030
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_6.json
+    └── 3D_AX_T1_postcontrast_6.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_2.json
+    ├── 3D_AX_T1_postcontrast_2.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-034
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_2.json
+    ├── 3D_AX_T1_postcontrast_2.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-035
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_3.json
+    ├── 3D_AX_T1_postcontrast_3.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-036
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_4.json
+    └── 3D_AX_T1_postcontrast_4.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_1.json
+    ├── 3D_AX_T1_postcontrast_1.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-037
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_4.json
+    └── 3D_AX_T1_postcontrast_4.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_1.json
+    ├── 3D_AX_T1_postcontrast_1.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-043
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_3.json
+    ├── 3D_AX_T1_postcontrast_3.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-045
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_3.json
+    ├── 3D_AX_T1_postcontrast_3.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-046
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_2.json
+    ├── 3D_AX_T1_postcontrast_2.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-050
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_6.json
+    └── 3D_AX_T1_postcontrast_6.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_3.json
+    ├── 3D_AX_T1_postcontrast_3.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-055
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_3.json
+    ├── 3D_AX_T1_postcontrast_3.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-057
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_4.json
+    ├── 3D_AX_T1_postcontrast_4.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-060
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_3.json
+    ├── 3D_AX_T1_postcontrast_3.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-061
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_6.json
+    └── 3D_AX_T1_postcontrast_6.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_3.json
+    ├── 3D_AX_T1_postcontrast_3.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-062
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_3.json
+    ├── 3D_AX_T1_postcontrast_3.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-064
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_3.json
+    ├── 3D_AX_T1_postcontrast_3.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-067
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_6.json
+    └── 3D_AX_T1_postcontrast_6.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_2.json
+    ├── 3D_AX_T1_postcontrast_2.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-068
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_3.json
+    ├── 3D_AX_T1_postcontrast_3.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-070
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_6.json
+    └── 3D_AX_T1_postcontrast_6.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_3.json
+    ├── 3D_AX_T1_postcontrast_3.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-071
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_2.json
+    ├── 3D_AX_T1_postcontrast_2.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-072
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_6.json
+    └── 3D_AX_T1_postcontrast_6.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_3.json
+    ├── 3D_AX_T1_postcontrast_3.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-073
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_3.json
+    ├── 3D_AX_T1_postcontrast_3.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-075
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_3.json
+    ├── 3D_AX_T1_postcontrast_3.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-077
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_1.json
+    ├── 3D_AX_T1_postcontrast_1.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-078
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_2.json
+    ├── 3D_AX_T1_postcontrast_2.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-079
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_3.json
+    ├── 3D_AX_T1_postcontrast_3.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-082
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_3.json
+    ├── 3D_AX_T1_postcontrast_3.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-083
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_3.json
+    ├── 3D_AX_T1_postcontrast_3.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-084
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_2.json
+    ├── 3D_AX_T1_postcontrast_2.nii
+    ├── 3D_AX_T1_postcontrast_2.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-085
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_2.json
+    ├── 3D_AX_T1_postcontrast_2.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-086
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_3.json
+    ├── 3D_AX_T1_postcontrast_3.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-089
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_1.json
+    ├── 3D_AX_T1_postcontrast_1.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-090
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_3.json
+    ├── 3D_AX_T1_postcontrast_3.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-093
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_3.json
+    ├── 3D_AX_T1_postcontrast_3.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-097
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_2.json
+    ├── 3D_AX_T1_postcontrast_2.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-099
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_2.json
+    ├── 3D_AX_T1_postcontrast_2.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-101
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_6.json
+    └── 3D_AX_T1_postcontrast_6.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_3.json
+    ├── 3D_AX_T1_postcontrast_3.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-102
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_3.json
+    ├── 3D_AX_T1_postcontrast_3.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-103
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_2.json
+    ├── 3D_AX_T1_postcontrast_2.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-104
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_3.json
+    ├── 3D_AX_T1_postcontrast_3.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-107
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_3.json
+    ├── 3D_AX_T1_postcontrast_3.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-108
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_2.json
+    ├── 3D_AX_T1_postcontrast_2.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-112
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_6.json
+    └── 3D_AX_T1_postcontrast_6.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_2.json
+    ├── 3D_AX_T1_postcontrast_2.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+Subject: ReMIND-113
+  [Intraop]
+    ├── 3D_AX_T1_postcontrast_5.json
+    └── 3D_AX_T1_postcontrast_5.nii.gz
+  [Preop]
+    ├── 3D_AX_T1_postcontrast_3.json
+    ├── 3D_AX_T1_postcontrast_3.nii
+    ├── 3D_AX_T1_postcontrast_3.nii.gz
+    └── resampled_to_fixed.nii.gz
+--------------------------------------------------
+
+==================================================
+Total Subjects Processed: 59
+==================================================
