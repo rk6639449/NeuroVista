@@ -55,6 +55,16 @@ python -m uvicorn server:app --host 127.0.0.1 --port 8000
 Dependencies: `pip install fastapi uvicorn python-multipart` (all already installed in
 this environment), plus the `voxelmorph` package from the previous section.
 
+### Sample cases (one click)
+
+The **Step 1** screen lists ready-to-run samples (Sample_1 … Sample_4) — real ReMIND
+patients that have expert tumour masks in `masks_test/`. Clicking a card loads the scans,
+attaches the ground-truth segmentation (`dataset` engine), runs segment → register →
+relocate, and lands on the **Tumour relocation showcase**: a drag-to-compare wipe view
+(initial plan vs. after-shift), a Δ-vector arrow, pulsing centroid, animated KPIs
+(shift mm, volume, Dice vs. the intraop residual mask, NCC, Jacobian), the 3D surfaces
+and the 3D Slicer bundle.
+
 ### Segmentation model (to be provided)
 
 Place the trained model at **`webapp/segmentation_model.pt`** — the pipeline detects it

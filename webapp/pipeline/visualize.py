@@ -19,6 +19,7 @@ COLORS = {
     'red': (255, 84, 84),
     'yellow': (255, 214, 90),
     'cyan': (80, 210, 255),
+    'violet': (196, 140, 255),
 }
 _PLANE_AXIS = {'axial': 2, 'coronal': 1, 'sagittal': 0}
 

@@ -162,6 +162,7 @@ async function refreshMetrics() {
   if (m.ncc != null) $('#mNcc').textContent = m.ncc.toFixed(3);
   if (m.runtime_s) $('#mTime').textContent = m.runtime_s.toFixed(1);
   if (m.stages.segment) $('#segEngineNote').textContent = m.segment.detail;
+  updateShowcase(m);
   if (m.has_segmentation_model === false) {
     $('#segModelPill').textContent = 'segmentation: demo engine';
     $('#segModelPill').className = 'pill warn';
@@ -294,7 +295,7 @@ async function renderView() {
   try {
     const base = await fetchImage(state.view.base);
     drawInto($('#cvBase'), base);
-    const overlayOrder = ['ovl_pre', 'ovl_affine', 'ovl_now']
+    const overlayOrder = ['ovl_pre', 'ovl_affine', 'ovl_now', 'ovl_gt']
       .filter((k) => state.view.ovls.has(k));
     const canvases = [$('#cvOvl1'), $('#cvOvl2'), $('#cvOvl3')];
     canvases.forEach((c) => {
@@ -309,6 +310,7 @@ async function renderView() {
     $('#vpBadge').textContent =
       `${state.view.base} · ${state.view.plane} · #${state.view.idx}`;
     updateOrientation();
+    renderWipe();
   } catch (err) {
     $('#vpBadge').textContent = 'unavailable';
     if (!renderView._warned) {
@@ -553,6 +555,246 @@ async function askCline(question) {
   }
   box.scrollTop = box.scrollHeight;
 }
+/* ---------------- sample cases ---------------- */
+let pipelineBusy = false;
+
+async function loadSamples() {
+  try {
+    const { samples } = await api('/samples');
+    $('#heroSamples').textContent = samples.length;
+    $('#sampleGrid').innerHTML = samples.map((s) => `
+      <button class="sample-card" data-sample="${s.id}">
+        <span class="sc-shimmer"></span>
+        <span class="sc-top"><span class="sc-id">${s.id}</span>${
+          s.has_gt ? '<span class="sc-gt">GROUND TRUTH</span>' : ''}</span>
+        <span class="sc-patient">${s.patient}</span>
+        <span class="sc-meta">tumour ≈${Math.round(s.mask_voxels / 1000)}k voxels
+          · ref ${s.mask_ref}${s.has_gt ? '<br>intraop residual mask included' : ''}</span>
+        <span class="sc-run">▶ Load &amp; run full pipeline</span>
+      </button>`).join('');
+    $$('#sampleGrid .sample-card').forEach((btn) =>
+      btn.addEventListener('click', () => runSample(btn.dataset.sample, btn)));
+  } catch (err) {
+    $('#sampleGrid').innerHTML =
+      `<div class="sample-loading">Samples unavailable: ${err.message}</div>`;
+  }
+}
+
+async function runSample(id, btn) {
+  if (pipelineBusy) return;
+  pipelineBusy = true;
+  const label = btn.querySelector('.sc-run');
+  const prev = label.textContent;
+  $$('#sampleGrid .sample-card').forEach((b) => { b.disabled = true; });
+  btn.classList.add('running');
+  try {
+    label.textContent = '① Loading case…';
+    const info = await api(`/session/${state.sid}/load_sample`,
+      { method: 'POST', body: { sample: id } });
+    uploadState.fixed = uploadState.moving = true;
+    setZoneFile('#dropFixed', `sample · ${info.fixed.name} — ${info.fixed.shape.join('×')}`);
+    setZoneFile('#dropMoving', `sample · ${info.moving.name} — ${info.moving.shape.join('×')}`);
+    updateUploadGate();
+    await refreshMetrics();
+    gotoStep(2);
+    log(`${id}: loaded ${info.patient} — tumour ${info.tumour_volume_cc} cc` +
+        `${info.ground_truth.present ? ' · ground truth attached' : ''}`);
+
+    label.textContent = '② Segmenting tumour…';
+    if (!await runStage('segment')) return;
+    label.textContent = '③ Registering with VoxelMorph…';
+    if (!await runStage('register')) return;
+    label.textContent = '④ Relocating the tumour…';
+    if (!await runStage('relocate')) return;
+
+    toast(`${info.patient}: pipeline complete — see the tumour relocation.`, 'ok');
+    gotoStep(3);
+  } catch (err) {
+    toast(`Sample failed: ${err.message}`, 'err');
+    log(`sample failed: ${err.message}`, 'err');
+  } finally {
+    pipelineBusy = false;
+    btn.classList.remove('running');
+    label.textContent = prev;
+    $$('#sampleGrid .sample-card').forEach((b) => { b.disabled = false; });
+  }
+}
+
+function setZoneFile(zoneSel, text) {
+  const zone = $(zoneSel);
+  zone.classList.add('ok');
+  zone.querySelector('[data-file]').textContent = text;
+}
+/* ---------------- relocation showcase (wipe view) ---------------- */
+function setWipePct(pct) {
+  const p = Math.max(0, Math.min(100, pct));
+  $('#wipeB').style.clipPath = `inset(0 0 0 ${p}%)`;
+  $('#wipeHandle').style.left = `${p}%`;
+  $('#wipeRange').value = String(Math.round(p));
+}
+
+function axesOf(plane) {
+  const ax = PLANE_AXIS[plane];
+  const others = [0, 1, 2].filter((a) => a !== ax);
+  return { ax, col: others[0], row: others[1] };
+}
+
+function projectVoxel(vox, plane, dims) {
+  const { col, row } = axesOf(plane);
+  return { x: vox[col], y: dims[row] - 1 - vox[row] };
+}
+
+function composite(canvas, images) {
+  const first = images.find((img) => img);
+  if (!first) return false;
+  canvas.width = first.width;
+  canvas.height = first.height;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  images.forEach((img) => {
+    if (img) ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  });
+  return true;
+}
+
+function drawRelocationArrow(canvas, m, plane, idx) {
+  const reloc = m.reloc;
+  if (!reloc || !reloc.affine_aligned || !reloc.shifted) return;
+  const { ax } = axesOf(plane);
+  const from = reloc.affine_aligned.voxel;
+  const to = reloc.shifted.voxel;
+  if (Math.abs(from[ax] - idx) > 3 || Math.abs(to[ax] - idx) > 3) return;
+
+  const a = projectVoxel(from, plane, m.dims);
+  const b = projectVoxel(to, plane, m.dims);
+  if (Math.hypot(b.x - a.x, b.y - a.y) < 6) return;
+
+  const ctx = canvas.getContext('2d');
+  ctx.save();
+  ctx.setLineDash([9, 7]);
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = '#ffd65a';
+  ctx.shadowColor = 'rgba(255, 214, 90, .8)';
+  ctx.shadowBlur = 8;
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.lineTo(b.x, b.y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  const ang = Math.atan2(b.y - a.y, b.x - a.x);
+  const head = 16;
+  ctx.fillStyle = '#ffd65a';
+  ctx.beginPath();
+  ctx.moveTo(b.x, b.y);
+  ctx.lineTo(b.x - head * Math.cos(ang - Math.PI / 7),
+    b.y - head * Math.sin(ang - Math.PI / 7));
+  ctx.lineTo(b.x - head * Math.cos(ang + Math.PI / 7),
+    b.y - head * Math.sin(ang + Math.PI / 7));
+  ctx.closePath();
+  ctx.fill();
+
+  const label = `Δ ${reloc.shift_magnitude_mm.toFixed(1)} mm`;
+  const mx = (a.x + b.x) / 2;
+  const my = (a.y + b.y) / 2;
+  ctx.font = 'bold 15px Segoe UI, sans-serif';
+  const w = ctx.measureText(label).width + 14;
+  ctx.fillStyle = 'rgba(7, 11, 24, .88)';
+  ctx.fillRect(mx - w / 2, my - 24, w, 21);
+  ctx.fillStyle = '#ffd65a';
+  ctx.fillText(label, mx - w / 2 + 7, my - 8);
+  ctx.restore();
+}
+
+async function renderWipe() {
+  const m = state.metrics;
+  if (!m || !m.stages.register) return;
+  const { plane, idx } = state.view;
+  try {
+    const [base, aff, now, gt] = await Promise.all([
+      fetchImage('fixed'),
+      fetchImage('ovl_affine').catch(() => null),
+      fetchImage('ovl_now').catch(() => null),
+      (m.gt && m.gt.present && state.view.ovls.has('ovl_gt'))
+        ? fetchImage('ovl_gt').catch(() => null) : Promise.resolve(null),
+    ]);
+    composite($('#wipeA'), [base, aff]);
+    composite($('#wipeB'), [base, now, gt]);
+    drawRelocationArrow($('#wipeB'), m, plane, idx);
+    positionPulse(m, plane, idx);
+  } catch (_) { /* viewer not ready yet */ }
+}
+
+function positionPulse(m, plane, idx) {
+  const dot = $('#pulseDot');
+  const to = m.reloc && m.reloc.shifted && m.reloc.shifted.voxel;
+  if (!to) { dot.hidden = true; return; }
+  const { ax } = axesOf(plane);
+  if (Math.abs(to[ax] - idx) > 1) { dot.hidden = true; return; }
+  const p = projectVoxel(to, plane, m.dims);
+  const { col, row } = axesOf(plane);
+  dot.hidden = false;
+  dot.style.left = `${(p.x / m.dims[col]) * 100}%`;
+  dot.style.top = `${(p.y / m.dims[row]) * 100}%`;
+}
+function animateNum(el, to, decimals) {
+  const from = Number(el.dataset.val || 0);
+  el.dataset.val = String(to);
+  const start = performance.now();
+  const dur = 700;
+  const tick = (now) => {
+    const t = Math.min(1, (now - start) / dur);
+    const eased = 1 - Math.pow(1 - t, 3);
+    el.textContent = (from + (to - from) * eased).toFixed(decimals);
+    if (t < 1 && Number(el.dataset.val) === to) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+function updateShowcase(m) {
+  // case identity + segmentation engine pills
+  $('#casePatient').textContent = m.patient
+    ? `${m.patient} · preop → intraop` : 'custom upload';
+  const eng = m.segment.engine;
+  const pill = $('#enginePill');
+  if (eng === 'dataset') {
+    pill.textContent = 'segmentation: ground-truth mask';
+    pill.className = 'engine-pill';
+  } else if (eng === 'model') {
+    pill.textContent = 'segmentation: trained model ✓';
+    pill.className = 'engine-pill';
+  } else if (eng === 'pseudo') {
+    pill.textContent = 'segmentation: demo engine';
+    pill.className = 'engine-pill warn';
+  } else {
+    pill.textContent = 'segmentation: pending';
+    pill.className = 'engine-pill warn';
+  }
+
+  // ground truth visibility
+  const gtOn = !!(m.gt && m.gt.present);
+  $('#gtPill').hidden = !gtOn;
+  $('#gtLegend').hidden = !gtOn;
+  $('#ovlGtChip').hidden = !gtOn;
+  if (gtOn && m.gt.dice != null) {
+    $('#mDiceCard').hidden = false;
+    animateNum($('#mDice'), m.gt.dice * 100, 1);
+    $('#mDiceSub').textContent = m.gt.distance_mm != null
+      ? `centroid dist ${m.gt.distance_mm.toFixed(1)} mm` : 'residual overlap';
+    if (!state.view.ovls.has('ovl_gt')) {
+      state.view.ovls.add('ovl_gt');
+      $('#ovlGtChip').classList.add('active');
+    }
+  } else {
+    $('#mDiceCard').hidden = true;
+    state.view.ovls.delete('ovl_gt');
+    $('#ovlGtChip').classList.remove('active');
+  }
+
+  // headline numbers
+  if (m.reloc) animateNum($('#mShift'), m.reloc.shift_magnitude_mm, 1);
+  if (m.segment.volume_cc != null) animateNum($('#mVolume'), m.segment.volume_cc, 1);
+}
+
 /* ---------------- event wiring ---------------- */
 function wireEvents() {
   $$('.step').forEach((s) => s.addEventListener('click',
@@ -615,6 +857,22 @@ function wireEvents() {
   $('#bright').addEventListener('input', applyBrightness);
   $('#contrast').addEventListener('input', applyBrightness);
 
+  // relocation wipe comparison
+  setWipePct(50);
+  $('#wipeRange').addEventListener('input', (e) => setWipePct(Number(e.target.value)));
+  const wipe = $('#wipe');
+  const wipeFromEvent = (e) => {
+    const rect = wipe.getBoundingClientRect();
+    setWipePct(((e.clientX - rect.left) / rect.width) * 100);
+  };
+  wipe.addEventListener('pointerdown', (e) => {
+    wipe.setPointerCapture(e.pointerId);
+    wipeFromEvent(e);
+  });
+  wipe.addEventListener('pointermove', (e) => {
+    if (e.buttons) wipeFromEvent(e);
+  });
+
   $('#addPoint').addEventListener('click', () => addPointRow());
   $('#updatePlan').addEventListener('click', (e) => updatePlan(e.currentTarget));
   $('#chatForm').addEventListener('submit', (e) => {
@@ -644,7 +902,8 @@ async function init() {
     const s = await api('/session', { method: 'POST' });
     state.sid = s.session_id;
     $('#sessionPill').textContent = `session: ${state.sid.slice(0, 8)}`;
-    log(`session ${state.sid} created — upload the case to begin.`);
+    log(`session ${state.sid} created — run a sample or upload a case.`);
+    loadSamples();
   } catch (err) {
     toast(`Could not reach the server: ${err.message}`, 'err');
     log(`init failed: ${err.message}`, 'err');

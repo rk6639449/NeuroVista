@@ -46,6 +46,11 @@ class Session:
     fixed: pp.Volume | None = None
     moving: pp.Volume | None = None
     mask_manual: pp.Volume | None = None
+    patient: str = ''                        # ReMIND id when a sample is loaded
+    dataset_mask: np.ndarray | None = None   # ground-truth preop tumour (moving grid)
+    gt_mask: np.ndarray | None = None        # intraop residual ground truth (fixed grid)
+    gt_name: str = ''
+    mask_cc: float | None = None             # segmented tumour volume (cc)
     mask_moving: np.ndarray | None = None       # bool, moving (preop) grid
     segment_engine: str = ''
     segment_detail: str = ''
@@ -138,6 +143,21 @@ def _sync_masks(sess: Session) -> None:
         sess.mask_moving, sess.disp, sess.moving.affine, sess.fixed.affine,
         sess.moving.zooms, sess.mask_affine, sess.mask_now)
 
+    # Ground-truth validation: intraop tumour-residual mask (when the patient has one)
+    if sess.gt_mask is not None:
+        inter = int(np.logical_and(sess.mask_now, sess.gt_mask).sum())
+        denom = int(sess.mask_now.sum()) + int(sess.gt_mask.sum())
+        sess.reloc['dice_vs_gt'] = float(2 * inter / denom) if denom else None
+        try:
+            gt_vox = rel.centroid_voxel(sess.gt_mask)
+            sess.reloc['gt_centroid_mm'] = \
+                pp.voxel_to_world(sess.fixed.affine, gt_vox).round(2).tolist()
+            gt_shift = sess.reloc['gt_centroid_mm']
+            sess.reloc['gt_distance_mm'] = float(np.linalg.norm(
+                np.asarray(sess.reloc['shifted']['mm']) - np.asarray(gt_shift)))
+        except ValueError:
+            sess.reloc['gt_centroid_mm'] = None
+
 
 # --------------------------------------------------------------------------
 # Session / upload / segmentation
@@ -205,15 +225,17 @@ def segment_tumour(sid: str) -> dict:
     _require(sess.moving is not None, 'Upload the moving (preoperative) image first.')
     with sess.lock:
         manual = sess.mask_manual.data if sess.mask_manual is not None else None
-        result = seg.segment(sess.moving.data, manual_mask=manual)
+        result = seg.segment(sess.moving.data, manual_mask=manual,
+                             dataset_mask=sess.dataset_mask)
         sess.mask_moving = result['mask']
         sess.segment_engine = result['engine']
         sess.segment_detail = result['detail']
         vox_mm3 = float(sess.mask_moving.sum() * np.prod(sess.moving.zooms))
+        sess.mask_cc = round(vox_mm3 / 1000.0, 2)
         _sync_masks(sess)
         return {'engine': result['engine'], 'detail': result['detail'],
                 'voxels': int(sess.mask_moving.sum()),
-                'volume_cc': round(vox_mm3 / 1000.0, 2)}
+                'volume_cc': sess.mask_cc}
 
 
 # --------------------------------------------------------------------------
@@ -279,13 +301,22 @@ def metrics(sid: str) -> dict:
         }
     return {
         'session_id': sid,
+        'patient': sess.patient or None,
         'stages': stages,
         'fixed': _meta(sess.fixed, Path(sess.fixed.path).name) if sess.fixed else None,
         'moving': _meta(sess.moving, Path(sess.moving.path).name) if sess.moving else None,
         'dims': dims,
         'affines': {'fixed': sess.fixed.affine.tolist() if sess.fixed else None,
                     'moving': sess.moving.affine.tolist() if sess.moving else None},
-        'segment': {'engine': sess.segment_engine, 'detail': sess.segment_detail},
+        'segment': {'engine': sess.segment_engine, 'detail': sess.segment_detail,
+                    'has_dataset_mask': sess.dataset_mask is not None,
+                    'volume_cc': sess.mask_cc},
+        'gt': {'present': sess.gt_mask is not None, 'name': sess.gt_name,
+               'dice': (sess.reloc or {}).get('dice_vs_gt'),
+               'centroid_mm': (sess.reloc or {}).get('gt_centroid_mm'),
+               'distance_mm': (sess.reloc or {}).get('gt_distance_mm')},
+        'reg': {'resolution_factor': reg.reg_resolution(sess.fixed.shape)[0]
+                if sess.fixed is not None and sess.disp is not None else None},
         'ncc': sess.ncc,
         'runtime_s': sess.runtime_s,
         'reloc': sess.reloc,
@@ -294,7 +325,8 @@ def metrics(sid: str) -> dict:
                   'checker': sess.warped is not None,
                   'ovl_pre': sess.mask_moving is not None,
                   'ovl_affine': sess.mask_affine is not None,
-                  'ovl_now': sess.mask_now is not None},
+                  'ovl_now': sess.mask_now is not None,
+                  'ovl_gt': sess.gt_mask is not None},
         'has_segmentation_model': seg.MODEL_PATH.is_file(),
         'plan_text': sess.plan_text,
     }
@@ -351,11 +383,133 @@ def view(sid: str, kind: str, plane: str = 'axial', idx: int = 0) -> Response:
                    'label': 'Current centre'}] if sess.reloc else None
         png = vis.render_overlay(sess.mask_now, plane, min(idx, _n('fixed') - 1),
                                  'red', marker, sess.fixed.affine)
+    elif kind == 'ovl_gt':
+        _require(sess.gt_mask is not None, 'No intraop ground-truth mask for this case.',
+                 409)
+        gt_mm = (sess.reloc or {}).get('gt_centroid_mm')
+        marker = [{'mm': gt_mm, 'color': 'violet', 'label': 'Residual (ground truth)'}] \
+            if gt_mm else None
+        png = vis.render_overlay(sess.gt_mask, plane, min(idx, _n('fixed') - 1),
+                                 'violet', marker, sess.fixed.affine)
     else:
         raise HTTPException(404, f'Unknown view "{kind}"')
 
     return Response(content=png, media_type='image/png',
                     headers={'Cache-Control': 'public, max-age=3600'})
+
+
+# --------------------------------------------------------------------------
+# Sample cases (one-click demo)
+# --------------------------------------------------------------------------
+SAMPLES_CACHE: list | None = None
+REMIND_ROOT = Path(__file__).resolve().parents[1] / 'remind-nifti'
+
+
+def _list_samples() -> list:
+    """Discover patients that have both scans and a usable preop tumour mask."""
+    global SAMPLES_CACHE
+    if SAMPLES_CACHE is not None:
+        return SAMPLES_CACHE
+
+    samples = []
+    for patient_dir in sorted(REMIND_ROOT.glob('ReMIND-*')):
+        patient = patient_dir.name
+        preop = sorted((patient_dir / 'Preop').glob('*postcontrast*.nii*'))
+        intra = sorted((patient_dir / 'Intraop').glob('*.nii*'))
+        if not preop or not intra or not (seg.MASKS_ROOT / patient).is_dir():
+            continue
+        mask_path, voxels = seg.find_dataset_mask(
+            patient, seg.series_of(preop[0].name))
+        if mask_path is None:
+            continue
+        gt_path = seg.find_gt_mask(patient, seg.series_of(intra[0].name))
+        samples.append({
+            'patient': patient,
+            'moving_path': str(preop[0]),
+            'fixed_path': str(intra[0]),
+            'moving_name': preop[0].name,
+            'fixed_name': intra[0].name,
+            'mask_path': str(mask_path),
+            'mask_ref': mask_path.name.split('ref-')[-1].replace('.nii.gz', ''),
+            'mask_voxels': voxels,
+            'gt_path': str(gt_path) if gt_path else None,
+            'has_gt': gt_path is not None,
+        })
+
+    samples.sort(key=lambda s: (s['has_gt'], s['mask_voxels']), reverse=True)
+    for i, sample in enumerate(samples, 1):
+        sample['id'] = f'Sample_{i}'
+    SAMPLES_CACHE = samples
+    return samples
+
+
+@app.get('/api/samples')
+def get_samples() -> dict:
+    """Public sample catalogue (no session needed)."""
+    return {'samples': [
+        {'id': s['id'], 'patient': s['patient'], 'mask_voxels': s['mask_voxels'],
+         'has_gt': s['has_gt'], 'mask_ref': s['mask_ref'],
+         'moving_name': s['moving_name'], 'fixed_name': s['fixed_name']}
+        for s in _list_samples()
+    ]}
+
+
+def _reset_session(sess: Session) -> None:
+    """Drop every derived artifact so a new case can be loaded cleanly."""
+    sess.fixed = sess.moving = sess.mask_manual = None
+    sess.patient = ''
+    sess.dataset_mask = sess.gt_mask = None
+    sess.gt_name = ''
+    sess.mask_moving = sess.mask_affine = sess.mask_now = sess.reloc = None
+    sess.moving_resampled = sess.warped = sess.disp = None
+    sess.segment_engine = sess.segment_detail = ''
+    sess.mask_cc = None
+    sess.ncc = None
+    sess.runtime_s = 0.0
+    sess.plan_text = ''
+    sess.u8.clear()
+
+
+@app.post('/api/session/{sid}/load_sample')
+def load_sample(sid: str, payload: dict) -> dict:
+    """Load a sample case (scans + ground-truth tumour masks) into the session."""
+    sess = _session(sid)
+    sample_id = payload.get('sample')
+    match = next((s for s in _list_samples() if s['id'] == sample_id), None)
+    _require(match is not None, f'Unknown sample "{sample_id}"', 404)
+
+    with sess.lock:
+        _reset_session(sess)
+        sess.moving = pp.Volume.load(match['moving_path'])
+        sess.fixed = pp.Volume.load(match['fixed_path'])
+        sess.patient = match['patient']
+        if match['mask_path']:
+            sess.dataset_mask = seg.load_dataset_mask(
+                match['mask_path'], sess.moving.shape, sess.moving.affine)
+        if match['gt_path']:
+            gt_vol = pp.Volume.load(match['gt_path'])
+            if gt_vol.shape == sess.fixed.shape and \
+                    np.allclose(gt_vol.affine, sess.fixed.affine, atol=1e-2):
+                sess.gt_mask = gt_vol.data > 0
+            else:
+                sess.gt_mask = pp.resample_to_grid(
+                    gt_vol, sess.fixed.shape, sess.fixed.affine, order=0) > 0.5
+            sess.gt_name = Path(match['gt_path']).name
+
+        mask_cc = None
+        if sess.dataset_mask is not None:
+            mask_cc = round(float(sess.dataset_mask.sum()
+                                  * np.prod(sess.moving.zooms)) / 1000.0, 2)
+        sess.mask_cc = mask_cc
+        return {
+            'patient': sess.patient,
+            'fixed': _meta(sess.fixed, Path(sess.fixed.path).name),
+            'moving': _meta(sess.moving, Path(sess.moving.path).name),
+            'tumour_volume_cc': mask_cc,
+            'dataset_mask': sess.dataset_mask is not None,
+            'ground_truth': {'present': sess.gt_mask is not None,
+                             'name': sess.gt_name},
+        }
 
 
 # --------------------------------------------------------------------------

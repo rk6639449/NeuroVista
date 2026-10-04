@@ -32,6 +32,33 @@
   <main>
     <!-- ============================ STEP 1 ============================ -->
     <section class="panel active" id="panel-1">
+      <div class="hero">
+        <div class="hero-badge">◆ Brain-shift correction · VoxelMorph + ground truth</div>
+        <h1>See where the tumour is <span class="grad-text">right now.</span></h1>
+        <p>Upload the intraoperative and preoperative MRI — NeuroVista segments the
+           tumour, registers the scans, and shows exactly how far the lesion moved
+           with the shifting brain, ready for surgical re-planning.</p>
+        <div class="hero-stats">
+          <div class="h-stat"><b id="heroSamples">4</b><span>one-click samples</span></div>
+          <div class="h-stat"><b>59</b><span>ReMIND cases</span></div>
+          <div class="h-stat"><b>3D</b><span>registration field</span></div>
+          <div class="h-stat"><b>mm</b><span>shift precision</span></div>
+        </div>
+      </div>
+
+      <div class="samples-block">
+        <div class="samples-head">
+          <h2>▶ Run a sample case</h2>
+          <p>Real ReMIND patients with expert tumour segmentations — one click loads the
+             scans and runs the entire pipeline.</p>
+        </div>
+        <div class="samples" id="sampleGrid">
+          <div class="sample-loading">Loading sample catalogue…</div>
+        </div>
+      </div>
+
+      <div class="or-divider"><span>or upload your own case</span></div>
+
       <div class="panel-head">
         <h1>Upload the case</h1>
         <p>Provide the <b>intraoperative</b> scan (fixed — defines the target grid) and the
@@ -127,6 +154,39 @@
            plus the 3D shifted-tumour rendering and the 3D Slicer export.</p>
       </div>
 
+      <!-- ============ TUMOUR RELOCATION SHOWCASE ============ -->
+      <div class="showcase" id="showcase">
+        <div class="showcase-head">
+          <div>
+            <h2>Tumour relocation</h2>
+            <div class="case-line">
+              <span class="case-chip" id="casePatient">case —</span>
+              <span class="engine-pill" id="enginePill">segmentation: —</span>
+              <span class="engine-pill gt" id="gtPill" hidden>✓ intraop ground truth</span>
+            </div>
+          </div>
+          <div class="showcase-legend">
+            <span><i class="sw sw-cyan"></i>Initial (affine-aligned)</span>
+            <span><i class="sw sw-red"></i>After brain shift</span>
+            <span id="gtLegend" hidden><i class="sw sw-violet"></i>Residual · ground truth</span>
+          </div>
+        </div>
+
+        <div class="wipe-block">
+          <div class="wipe" id="wipe">
+            <canvas id="wipeA"></canvas>
+            <canvas id="wipeB" class="wipe-b"></canvas>
+            <div class="wipe-label wl-left">INITIAL PLAN</div>
+            <div class="wipe-label wl-right">AFTER BRAIN SHIFT</div>
+            <div class="wipe-handle" id="wipeHandle"><span>⟺</span></div>
+            <div class="pulse-dot" id="pulseDot" hidden></div>
+            <div class="wipe-hint">drag ⟺ to compare · follows the viewer below</div>
+          </div>
+          <input type="range" class="wipe-range" id="wipeRange" min="0" max="100"
+                 value="50" aria-label="comparison divider" />
+        </div>
+      </div>
+
       <div class="viz-layout">
         <div class="viz-toolbar">
           <div class="chip-group" id="baseChips">
@@ -143,6 +203,7 @@
             <button class="chip ovl" data-ovl="ovl_pre">Preop mask</button>
             <button class="chip ovl" data-ovl="ovl_affine">Affine-aligned</button>
             <button class="chip ovl active" data-ovl="ovl_now">Current tumour</button>
+            <button class="chip ovl" data-ovl="ovl_gt" id="ovlGtChip" hidden>Ground truth</button>
           </div>
           <div class="chip-group" id="planeChips">
             <span class="chip-label">Plane</span>
@@ -197,10 +258,12 @@
         </aside>
       </div>
       <div class="metric-grid" id="metricGrid">
-        <div class="metric"><span class="m-label">Brain shift</span>
+        <div class="metric hero-metric"><span class="m-label">Brain shift</span>
           <span class="m-value" id="mShift">—</span><span class="m-unit" id="mShiftDir"></span></div>
         <div class="metric"><span class="m-label">Tumour volume</span>
           <span class="m-value" id="mVolume">—</span><span class="m-unit">cc</span></div>
+        <div class="metric" id="mDiceCard" hidden><span class="m-label">Dice vs ground truth</span>
+          <span class="m-value" id="mDice">—</span><span class="m-unit" id="mDiceSub">residual overlap</span></div>
         <div class="metric"><span class="m-label">Registration NCC</span>
           <span class="m-value" id="mNcc">—</span><span class="m-unit"></span></div>
         <div class="metric"><span class="m-label">Field p95</span>

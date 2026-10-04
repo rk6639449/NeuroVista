@@ -63,9 +63,83 @@ def _pseudo_mask(volume: np.ndarray) -> np.ndarray:
     return largest
 
 
-def segment(volume: np.ndarray, manual_mask: np.ndarray | None = None) -> dict:
+# --------------------------------------------------------------------------
+# Ground-truth masks shipped with the repository (masks_test/)
+# --------------------------------------------------------------------------
+import nibabel as nib  # noqa: E402  (kept next to the mask helpers)
+
+MASKS_ROOT = Path(__file__).resolve().parents[2] / 'masks_test'
+MIN_MASK_VOXELS = 500  # ignore degenerate segmentations (e.g. 141-voxel stubs)
+
+
+def series_of(filename: str) -> str:
+    """``3D_AX_T1_postcontrast_1.nii.gz`` -> ``3D_AX_T1_postcontrast``."""
+    stem = Path(filename).name.replace('.nii.gz', '').replace('.nii', '')
+    head, _, tail = stem.rpartition('_')
+    return head if tail.isdigit() else stem
+
+
+def find_dataset_mask(patient: str, moving_series: str) -> tuple:
+    """
+    Pick the best preop tumour mask for a patient from ``masks_test/``.
+
+    Preference: sequence-matched mask (unless degenerate), then the largest
+    mask (world-coordinate resampling makes any reference sequence usable).
+
+    Returns ``(path, voxel_count)`` or ``(None, 0)``.
+    """
+    pre_dir = MASKS_ROOT / patient / 'preop'
+    if not pre_dir.is_dir():
+        return None, 0
+    best_path, best_key = None, None
+    for cand in sorted(pre_dir.glob('*_preop_tumor_*.nii*')):
+        data = np.asanyarray(nib.load(str(cand)).dataobj) > 0
+        voxels = int(data.sum())
+        if voxels < MIN_MASK_VOXELS:
+            continue
+        ref = cand.name.split('ref-')[-1].replace('.nii.gz', '').replace('.nii', '')
+        key = (1 if ref == moving_series else 0, voxels)
+        if best_key is None or key > best_key:
+            best_path, best_key = cand, key
+    return best_path, (best_key[1] if best_key else 0)
+
+
+def load_dataset_mask(path, moving_shape, moving_affine) -> np.ndarray:
+    """World-resample a dataset mask onto the moving image's voxel grid."""
+    from nibabel.processing import resample_from_to
+
+    img = nib.load(str(path))
+    if img.shape == tuple(moving_shape) and \
+            np.allclose(img.affine, moving_affine, atol=1e-2):
+        return np.asanyarray(img.dataobj) > 0
+    out = resample_from_to(img, (tuple(moving_shape), moving_affine), order=0)
+    return out.get_fdata() > 0.5
+
+
+def find_gt_mask(patient: str, fixed_series: str):
+    """Best intraop tumour-residual mask (ground truth for 'where it is now')."""
+    ino_dir = MASKS_ROOT / patient / 'intraop'
+    if not ino_dir.is_dir():
+        return None
+    best, best_key = None, None
+    for cand in sorted(ino_dir.glob('*_tumor_residual*.nii*')):
+        voxels = int((np.asanyarray(nib.load(str(cand)).dataobj) > 0).sum())
+        if voxels < MIN_MASK_VOXELS:
+            continue
+        ref = cand.name.split('ref-')[-1].replace('.nii.gz', '').replace('.nii', '')
+        key = (1 if ref == fixed_series else 0, voxels)
+        if best_key is None or key > best_key:
+            best, best_key = cand, key
+    return best
+
+
+def segment(volume: np.ndarray, manual_mask: np.ndarray | None = None,
+            dataset_mask: np.ndarray | None = None) -> dict:
     """
     Produce a binary tumour mask in the *moving* (preoperative) space.
+
+    Engine priority: clinician upload > repository ground-truth mask >
+    trained model > demo heuristic.
 
     Returns ``{'mask': bool ndarray, 'engine': str, 'detail': str}``.
     """
@@ -73,6 +147,12 @@ def segment(volume: np.ndarray, manual_mask: np.ndarray | None = None) -> dict:
         mask = manual_mask.astype(bool)
         return {'mask': mask, 'engine': 'manual',
                 'detail': 'Clinician-provided tumour mask (preoperative space).'}
+
+    if dataset_mask is not None:
+        mask = dataset_mask.astype(bool)
+        return {'mask': mask, 'engine': 'dataset',
+                'detail': 'Ground-truth tumour segmentation from masks_test/ '
+                          '(world-resampled onto the preoperative grid).'}
 
     model = load_model()
     if model is not None:
