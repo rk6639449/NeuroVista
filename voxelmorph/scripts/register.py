@@ -1,97 +1,184 @@
-#!/usr/bin/env python
-
-"""
-Example script to register two volumes with VoxelMorph models.
-
-Please make sure to use trained models appropriately. Let's say we have a model trained to register 
-a scan (moving) to an atlas (fixed). To register a scan to the atlas and save the warp field, run:
-
-    register.py --moving moving.nii.gz --fixed fixed.nii.gz --model model.pt
-        --moved moved.nii.gz --warp warp.nii.gz
-
-The source and target input images are expected to be affinely registered.
-
-If you use this code, please cite the following, and read function docs for further info/citations
-    VoxelMorph: A Learning Framework for Deformable Medical Image Registration 
-    G. Balakrishnan, A. Zhao, M. R. Sabuncu, J. Guttag, A.V. Dalca. 
-    IEEE TMI: Transactions on Medical Imaging. 38(8). pp 1788-1800. 2019. 
-
-    or
-
-    Unsupervised Learning for Probabilistic Diffeomorphic Registration for Images and Surfaces
-    A.V. Dalca, G. Balakrishnan, J. Guttag, M.R. Sabuncu. 
-    MedIA: Medical Image Analysis. (57). pp 226-236, 2019 
-
-Copyright 2020 Adrian V. Dalca
-
-Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in 
-compliance with the License. You may obtain a copy of the License at
-
-http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software distributed under the License is
-distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or 
-implied. See the License for the specific language governing permissions and limitations under 
-the License.
-"""
-
-# Core library imports
-import os
 import argparse
+import os
 
-# Third-party imports
+import nibabel as nib
+import numpy as np
 import torch
+import torch.nn.functional as F
 
 os.environ['NEURITE_BACKEND'] = 'pytorch'
 os.environ['VXM_BACKEND'] = 'pytorch'
 
-# Local imports
-import voxelmorph as vxm   # nopep8
+import voxelmorph as vxm  # nopep8
 
-# parse commandline args
-parser = argparse.ArgumentParser()
-parser.add_argument('--moving', required=True, help='moving image (source) filename')
-parser.add_argument('--fixed', required=True, help='fixed image (target) filename')
-parser.add_argument('--moved', required=True, help='warped image output filename')
-parser.add_argument('--model', required=True, help='pytorch model for nonlinear registration')
-parser.add_argument('--warp', help='output warp deformation filename')
-parser.add_argument('-g', '--gpu', help='GPU number(s) - if not supplied, CPU is used')
-parser.add_argument('--multichannel', action='store_true',
-                    help='specify that data has multiple channels')
-args = parser.parse_args()
 
-# device handling
-if args.gpu and (args.gpu != '-1'):
-    device = 'cuda'
-    os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
-else:
-    device = 'cpu'
-    os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+def preprocess_volume(
+    nii_path: str,
+    normalize: bool = True,
+    target_shape: tuple[int, int, int] = (160, 192, 160)
+) -> tuple[torch.Tensor, np.ndarray, tuple[int, int, int], tuple[float, float], list[int]]:
+    """Loads a NIfTI volume, applies intensity normalization, pads/crops to match training dimensions,
 
-# load moving and fixed images
-add_feat_axis = not args.multichannel
-moving = vxm.py.utils.load_volfile(args.moving, add_batch_axis=True, add_feat_axis=add_feat_axis)
-fixed, fixed_affine = vxm.py.utils.load_volfile(
-    args.fixed, add_batch_axis=True, add_feat_axis=add_feat_axis, ret_affine=True)
+    and returns preprocessed tensor and spatial metadata.
+    """
+    nii = nib.load(nii_path)
+    affine = nii.affine
+    orig_shape = nii.shape[:3]
+    data = nii.get_fdata().astype(np.float32)
 
-# load and set up model
-model = vxm.networks.VxmDense.load(args.model, device)
-model.to(device)
-model.eval()
+    # 1. Track Intensity Range & Normalize
+    min_val, max_val = float(data.min()), float(data.max())
+    if normalize and max_val > min_val:
+        data = (data - min_val) / (max_val - min_val)
 
-# set up tensors and permute
-input_moving = torch.from_numpy(moving).to(device).float().permute(0, 4, 1, 2, 3)
-input_fixed = torch.from_numpy(fixed).to(device).float().permute(0, 4, 1, 2, 3)
+    tensor = torch.from_numpy(data).unsqueeze(0).unsqueeze(0)  # (1, 1, H, W, D)
 
-# predict
-moved, warp = model(input_moving, input_fixed, registration=True)
+    # 2. Calculate Symmetric Padding or Cropping
+    curr_shape = tensor.shape[2:]
+    pad_dims = []
+    pad_offsets = []
 
-# save moved image
-if args.moved:
-    moved = moved.detach().cpu().numpy().squeeze()
-    vxm.py.utils.save_volfile(moved, args.moved, fixed_affine)
+    for curr, target in zip(reversed(curr_shape), reversed(target_shape)):
+        diff = target - curr
+        if diff > 0:
+            pad_before = diff // 2
+            pad_after = diff - pad_before
+            pad_dims.extend([pad_before, pad_after])
+            pad_offsets.append(pad_before)
+        else:
+            pad_dims.extend([0, 0])
+            pad_offsets.append(0)
 
-# save warp
-if args.warp:
-    warp = warp.detach().cpu().numpy().squeeze()
-    vxm.py.utils.save_volfile(warp, args.warp, fixed_affine)
+    if any(p > 0 for p in pad_dims):
+        tensor = F.pad(tensor, pad_dims, mode='constant', value=0)
+
+    # Crop along center if larger than target shape
+    _, _, h, w, d = tensor.shape
+    th, tw, td = target_shape
+    sh = max((h - th) // 2, 0)
+    sw = max((w - tw) // 2, 0)
+    sd = max((d - td) // 2, 0)
+
+    tensor = tensor[:, :, sh:sh + th, sw:sw + tw, sd:sd + td]
+    
+    # Store spatial offsets for postprocessing (reverse order back to H, W, D)
+    offsets = [pad_offsets[2], pad_offsets[1], pad_offsets[0], sh, sw, sd]
+    
+    return tensor, affine, orig_shape, (min_val, max_val), offsets
+
+
+def postprocess_volume(
+    tensor: torch.Tensor,
+    orig_shape: tuple[int, int, int],
+    offsets: list[int],
+    intensity_range: tuple[float, float] = None,
+    target_shape: tuple[int, int, int] = (160, 192, 160)
+) -> np.ndarray:
+    """Restores the output image or warp field tensor to its original input shape and intensity scale."""
+    data = tensor.detach().cpu().squeeze().numpy()
+
+    is_warp = data.ndim == 4 and data.shape[0] == 3
+    if is_warp:
+        data = np.moveaxis(data, 0, -1)
+
+    pad_h, pad_w, pad_d, sh, sw, sd = offsets
+
+    # 1. Re-scale intensity back to original range if image
+    if not is_warp and intensity_range is not None:
+        min_val, max_val = intensity_range
+        data = data * (max_val - min_val) + min_val
+
+    # 2. Re-pad if cropped during preprocessing
+    curr_h, curr_w, curr_d = data.shape[:3]
+    if sh > 0 or sw > 0 or sd > 0:
+        pad_width = [(sh, sh), (sw, sw), (sd, sd)]
+        if is_warp:
+            pad_width.append((0, 0))
+        data = np.pad(data, pad_width, mode='constant', constant_values=0)
+
+    # 3. Un-pad to original volume dimensions
+    h_end = pad_h + orig_shape[0]
+    w_end = pad_w + orig_shape[1]
+    d_end = pad_d + orig_shape[2]
+
+    if is_warp:
+        data = data[pad_h:h_end, pad_w:w_end, pad_d:d_end, :]
+    else:
+        data = data[pad_h:h_end, pad_w:w_end, pad_d:d_end]
+
+    return data
+
+
+def main():
+    parser = argparse.ArgumentParser(description='VoxelMorph inference for ReMIND dataset')
+    parser.add_argument('--moving', required=True, help='moving image (Preop) filename')
+    parser.add_argument('--fixed', required=True, help='fixed image (Intraop) filename')
+    parser.add_argument('--moved', required=True, help='warped image output filename')
+    parser.add_argument('--model', required=True, help='trained pytorch model (.pt) path')
+    parser.add_argument('--warp', help='output warp deformation field filename')
+    parser.add_argument('-g', '--gpu', help='GPU ID. If omitted, CPU is used')
+    args = parser.parse_args()
+
+    # Device Handling
+    if args.gpu and (args.gpu != '-1'):
+        device = 'cuda'
+        os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
+    else:
+        device = 'cpu'
+        os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+
+    print(f'Using device: {device}')
+
+    # 1. Load Preprocessed Input Images & Spatial Metadata
+    moving_tensor, moving_affine, orig_shape_m, range_m, offsets_m = preprocess_volume(args.moving)
+    fixed_tensor, fixed_affine, orig_shape_f, range_f, offsets_f = preprocess_volume(args.fixed)
+
+    input_moving = moving_tensor.to(device).float()
+    input_fixed = fixed_tensor.to(device).float()
+
+    # 2. Instantiate and Load the Trained VxmPairwise Model
+    model = vxm.nn.models.VxmPairwise(
+        ndim=3,
+        source_channels=1,
+        target_channels=1,
+        nb_features=[16, 16, 16, 16, 16],
+        integration_steps=0,
+    ).to(device)
+
+    state_dict = torch.load(args.model, map_location=device)
+    model.load_state_dict(state_dict)
+    model.eval()
+
+    # 3. Predict Displacement Field and Warped Image
+    with torch.no_grad():
+        displacement, warped_source = model(
+            input_moving,
+            input_fixed,
+            return_warped_source=True,
+            return_field_type='displacement'
+        )
+
+    # 4. Save Warped Moving Image (with moving_affine header)
+    if args.moved:
+        moved_np = postprocess_volume(
+            warped_source, 
+            orig_shape_m, 
+            offsets_m, 
+            intensity_range=range_m
+        )
+        vxm.py.utils.save_volfile(moved_np, args.moved, moving_affine)
+        print(f'Warped image saved to: {args.moved}')
+
+    # 5. Save Deformation Field (with fixed_affine header)
+    if args.warp:
+        warp_np = postprocess_volume(
+            displacement, 
+            orig_shape_f, 
+            offsets_f
+        )
+        vxm.py.utils.save_volfile(warp_np, args.warp, fixed_affine)
+        print(f'Deformation field saved to: {args.warp}')
+
+
+if __name__ == '__main__':
+    main()
