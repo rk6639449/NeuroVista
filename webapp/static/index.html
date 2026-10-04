@@ -1,15 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>NeuroVista · Surgical Planning</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
-        rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
+
 <body>
   <header class="topbar">
     <div class="brand">
@@ -37,11 +38,11 @@
     <!-- ============================ STEP 1 ============================ -->
     <section class="panel active" id="panel-1">
       <div class="hero">
-        <div class="hero-badge">◆ Brain-shift correction · VoxelMorph + ground truth</div>
+      
         <h1>See where the tumour is <span class="grad-text">right now.</span></h1>
         <p>Upload the intraoperative and preoperative MRI — NeuroVista segments the
-           tumour, registers the scans, and shows exactly how far the lesion moved
-           with the shifting brain, ready for surgical re-planning.</p>
+          tumour, registers the scans, and shows exactly how far the lesion moved
+          with the shifting brain, ready for surgical re-planning.</p>
         <div class="hero-stats">
           <div class="h-stat"><b id="heroSamples">3</b><span>one-click samples</span></div>
           <div class="h-stat"><b>59</b><span>ReMIND cases</span></div>
@@ -54,7 +55,7 @@
         <div class="samples-head">
           <h2>▶ Run a sample case</h2>
           <p>Real ReMIND patients with expert tumour segmentations — one click loads the
-             scans and runs the entire pipeline.</p>
+            scans and runs the entire pipeline.</p>
         </div>
         <div class="samples" id="sampleGrid">
           <div class="sample-loading">Loading sample catalogue…</div>
@@ -66,7 +67,8 @@
       <div class="panel-head">
         <h1>Upload the case</h1>
         <p>Provide the <b>intraoperative</b> scan (fixed — defines the target grid) and the
-           <b>preoperative</b> scan (moving — warped by VoxelMorph). NIfTI (.nii / .nii.gz).</p>
+          <b>preoperative</b> scan (moving — warped by VoxelMorph). NIfTI (.nii / .nii.gz).
+        </p>
       </div>
 
       <div class="drop-grid">
@@ -109,34 +111,39 @@
       <div class="panel-head">
         <h1>Processing pipeline</h1>
         <p>Segment the tumour → register preoperative to intraoperative with the trained
-           VoxelMorph model → recover the deformation field → relocate the tumour.</p>
+          VoxelMorph model → recover the deformation field → relocate the tumour.</p>
       </div>
 
       <div class="stage-grid">
         <article class="stage" id="stageSegment">
           <header><span class="stage-no">01</span>
-            <span class="badge" id="badgeSegment">pending</span></header>
+            <span class="badge" id="badgeSegment">pending</span>
+          </header>
           <h3>Tumour segmentation</h3>
           <p>Detects the tumour on the preoperative scan.
-             <span id="segEngineNote">Model not provided yet — demo engine active.</span></p>
+            <span id="segEngineNote">Model not provided yet — demo engine active.</span>
+          </p>
           <button class="btn" data-run="segment">Run segmentation</button>
         </article>
 
         <article class="stage" id="stageRegister">
           <header><span class="stage-no">02</span>
-            <span class="badge" id="badgeRegister">pending</span></header>
+            <span class="badge" id="badgeRegister">pending</span>
+          </header>
           <h3>VoxelMorph registration</h3>
           <p>Warps the moving image onto the fixed grid with <code>final.pt</code>
-             and yields the deformation field.</p>
+            and yields the deformation field.</p>
           <button class="btn" data-run="register">Run registration</button>
         </article>
 
         <article class="stage" id="stageRelocate">
           <header><span class="stage-no">03</span>
-            <span class="badge" id="badgeRelocate">pending</span></header>
+            <span class="badge" id="badgeRelocate">pending</span>
+          </header>
           <h3>Tumour relocation</h3>
           <p>Propagates the tumour mask through the field: where the tumour is
-             <i>now</i> and how far it shifted.</p>
+            <i>now</i> and how far it shifted.
+          </p>
           <button class="btn" data-run="relocate">Compute shift</button>
         </article>
       </div>
@@ -148,14 +155,16 @@
         <button class="btn" id="toStep3" disabled>Open visualization →</button>
       </div>
 
-      <div class="console" id="console"><div class="console-line dim">Ready. Waiting for commands…</div></div>
+      <div class="console" id="console">
+        <div class="console-line dim">Ready. Waiting for commands…</div>
+      </div>
     </section>
     <!-- ============================ STEP 3 ============================ -->
     <section class="panel" id="panel-3">
       <div class="panel-head">
         <h1>Visualization</h1>
         <p>Slice viewer with tumour contours, centroid markers, deformation heatmap —
-           plus the 3D shifted-tumour rendering and the 3D Slicer export.</p>
+          plus the 3D shifted-tumour rendering and the 3D Slicer export.</p>
       </div>
 
       <!-- ============ TUMOUR RELOCATION SHOWCASE ============ -->
@@ -186,8 +195,8 @@
             <div class="pulse-dot" id="pulseDot" hidden></div>
             <div class="wipe-hint">drag ⟺ to compare · follows the viewer below</div>
           </div>
-          <input type="range" class="wipe-range" id="wipeRange" min="0" max="100"
-                 value="50" aria-label="comparison divider" />
+          <input type="range" class="wipe-range" id="wipeRange" min="0" max="100" value="50"
+            aria-label="comparison divider" />
         </div>
       </div>
 
@@ -242,7 +251,9 @@
           <div class="side-card">
             <h4>Tumour position <span class="mini">(RAS mm)</span></h4>
             <table class="pos-table" id="posTable">
-              <tr class="dim"><td colspan="3">Run the pipeline to see results.</td></tr>
+              <tr class="dim">
+                <td colspan="3">Run the pipeline to see results.</td>
+              </tr>
             </table>
           </div>
           <div class="side-card">
@@ -255,27 +266,34 @@
           <div class="side-card slicer-card">
             <h4>3D Slicer</h4>
             <p class="mini">Full-fidelity review: volumes, masks, deformation field and the
-               updated plan as NIfTI — drag into <a href="https://slicer.org" target="_blank"
-               rel="noopener">3D Slicer</a>.</p>
+              updated plan as NIfTI — drag into <a href="https://slicer.org" target="_blank" rel="noopener">3D
+                Slicer</a>.</p>
             <a class="btn primary block" id="exportBtn" href="#" download>⬇ Download Slicer bundle</a>
           </div>
         </aside>
       </div>
       <div class="metric-grid" id="metricGrid">
         <div class="metric hero-metric"><span class="m-label">Brain shift</span>
-          <span class="m-value" id="mShift">—</span><span class="m-unit" id="mShiftDir"></span></div>
+          <span class="m-value" id="mShift">—</span><span class="m-unit" id="mShiftDir"></span>
+        </div>
         <div class="metric"><span class="m-label">Tumour volume</span>
-          <span class="m-value" id="mVolume">—</span><span class="m-unit">cc</span></div>
+          <span class="m-value" id="mVolume">—</span><span class="m-unit">cc</span>
+        </div>
         <div class="metric" id="mDiceCard" hidden><span class="m-label">Dice vs ground truth</span>
-          <span class="m-value" id="mDice">—</span><span class="m-unit" id="mDiceSub">residual overlap</span></div>
+          <span class="m-value" id="mDice">—</span><span class="m-unit" id="mDiceSub">residual overlap</span>
+        </div>
         <div class="metric"><span class="m-label">Registration NCC</span>
-          <span class="m-value" id="mNcc">—</span><span class="m-unit"></span></div>
+          <span class="m-value" id="mNcc">—</span><span class="m-unit"></span>
+        </div>
         <div class="metric"><span class="m-label">Field p95</span>
-          <span class="m-value" id="mP95">—</span><span class="m-unit">mm</span></div>
+          <span class="m-value" id="mP95">—</span><span class="m-unit">mm</span>
+        </div>
         <div class="metric"><span class="m-label">Jacobian ≤ 0</span>
-          <span class="m-value" id="mJac">—</span><span class="m-unit">%</span></div>
+          <span class="m-value" id="mJac">—</span><span class="m-unit">%</span>
+        </div>
         <div class="metric"><span class="m-label">Registration time</span>
-          <span class="m-value" id="mTime">—</span><span class="m-unit">s</span></div>
+          <span class="m-value" id="mTime">—</span><span class="m-unit">s</span>
+        </div>
       </div>
 
       <div class="panel-actions">
@@ -289,10 +307,7 @@
         <h3>Preoperative vs. current tumour location</h3>
         <div class="three-wrap">
           <canvas id="threeCanvas"></canvas>
-          <div class="three-fallback" id="threeFallback" hidden>
-            3D renderer unavailable (offline). The slice viewer and the 3D Slicer bundle
-            show the same tumour geometry.
-          </div>
+
         </div>
         <div class="legend">
           <span class="lg"><i class="sw sw-green"></i>Preoperative tumour</span>
@@ -307,7 +322,7 @@
       <div class="panel-head">
         <h1>Surgical planning <span class="engine-badge" id="engineBadge">Cline SDK</span></h1>
         <p>Enter the initial preoperative plan. Every coordinate is mapped through the
-           measured deformation field and returned as an updated navigation plan.</p>
+          measured deformation field and returned as an updated navigation plan.</p>
       </div>
 
       <div class="plan-layout">
@@ -315,7 +330,15 @@
           <article class="side-card">
             <h4>Planned coordinates <span class="mini">(preop, RAS mm)</span></h4>
             <table class="points-table" id="pointsTable">
-              <thead><tr><th>Label</th><th>X</th><th>Y</th><th>Z</th><th></th></tr></thead>
+              <thead>
+                <tr>
+                  <th>Label</th>
+                  <th>X</th>
+                  <th>Y</th>
+                  <th>Z</th>
+                  <th></th>
+                </tr>
+              </thead>
               <tbody></tbody>
             </table>
             <button class="btn ghost small" id="addPoint">+ Add point</button>
@@ -323,13 +346,18 @@
 
           <article class="side-card">
             <h4>Initial plan steps</h4>
-            <textarea id="planSteps" rows="5"
-              placeholder="One step per line, e.g.&#10;Right frontal craniotomy, 4 cm"></textarea>
+            <textarea id="planSteps" rows="5" placeholder=" Confirm tumour target on preoperative MRI.
+Plan the surgical entry trajectory.
+Register with intraoperative imaging.
+Update target coordinates using measured brain shift."></textarea>
           </article>
 
           <article class="side-card">
             <h4>Surgeon notes</h4>
-            <textarea id="planNotes" rows="3" placeholder="Free-text notes from planning…"></textarea>
+            <textarea id="planNotes" rows="3" placeholder="Tumour target identified on preoperative imaging.
+Monitor displacement after intraoperative deformation.
+Apply NeuroVista deformation correction to the target.
+Verify updated coordinates before navigation."></textarea>
           </article>
 
           <button class="btn primary block" id="updatePlan">↻ Update plan with measured shift</button>
@@ -350,8 +378,7 @@ here and inside the 3D Slicer bundle.</pre>
                 quality, updated coordinates…</div>
             </div>
             <form class="chat-form" id="chatForm">
-              <input type="text" id="chatInput" placeholder="e.g. How much did the tumour shift?"
-                     autocomplete="off" />
+              <input type="text" id="chatInput" placeholder="e.g. How much did the tumour shift?" autocomplete="off" />
               <button class="btn primary" type="submit">Ask</button>
             </form>
           </article>
@@ -369,4 +396,5 @@ here and inside the 3D Slicer bundle.</pre>
   <div class="toasts" id="toasts"></div>
   <script src="/static/app.js"></script>
 </body>
+
 </html>
