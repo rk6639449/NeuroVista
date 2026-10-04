@@ -3,6 +3,11 @@
 You will likely have to customize this script slightly to accommodate your own data. All images
 should be appropriately cropped and scaled to values between 0 and 1.
 
+This copy is configured for the ReMIND brain-shift dataset (remind-nifti/). ReMINDDataset
+streams pairs in which the intraoperative postcontrast T1 (Intraop/*postcontrast*.nii[.gz])
+is the fixed/target image and the preoperative T1 resampled onto that grid
+(Preop/resampled_to_fixed.nii[.gz]) is the moving/source image.
+
 If an atlas file is provided with the --atlas flag, then scan-to-atlas training is performed.
 Otherwise, registration will be scan-to-scan.
 
@@ -33,7 +38,8 @@ License.
 
 # Core library imports
 import argparse
-from typing import Sequence
+from collections import Counter
+from typing import NamedTuple, Sequence
 from pathlib import Path
 
 # Third-party imports
@@ -41,7 +47,7 @@ import numpy as np
 import nibabel as nib
 import torch
 from torch import nn
-from torch.utils.data import IterableDataset, DataLoader
+from torch.utils.data import IterableDataset, DataLoader, get_worker_info
 from tqdm import tqdm
 import neurite as ne
 
@@ -49,59 +55,196 @@ import neurite as ne
 import voxelmorph as vxm
 
 
-class VxmIterableDataset(IterableDataset):
+DEFAULT_DATA_ROOT = Path(__file__).resolve().parents[2] / 'remind-nifti'
+
+# VxmPairwise's default 5-level UNet downsamples 5 times, so every spatial dimension must
+# be a multiple of 2 ** 5 = 32 or the decoder's skip connections will not line up.
+SHAPE_MULTIPLE = 32
+
+
+class _ReMINDPair(NamedTuple):
+    """A single subject's (fixed, moving) volume paths on a shared voxel grid."""
+
+    subject: str
+    fixed: Path   # Intraop postcontrast T1 -- defines the target grid
+    moving: Path  # Preop T1 already resampled onto the fixed grid
+    shape: tuple  # common (D, H, W) shape of both volumes
+
+
+class ReMINDDataset(IterableDataset):
     """
-    PyTorch IterableDataset for infinite VoxelMorph registration data.
+    Infinite PyTorch IterableDataset over ReMIND preop/intraop registration pairs.
+
+    For each ``ReMIND-*`` subject folder under ``root`` this dataset yields:
+
+    - ``target`` (fixed image): the intraoperative postcontrast T1 volume,
+      ``<subject>/Intraop/*postcontrast*.nii[.gz]``.
+    - ``source`` (moving image): the preoperative T1 already resampled onto the fixed grid
+      by ``Preprocessing/Resampling.py``, ``<subject>/Preop/resampled_to_fixed.nii[.gz]``.
+
+    Volumes are min-max normalized to [0, 1], given a leading channel dimension, and --
+    unless ``target_shape`` is None -- center cropped/padded to ``target_shape``. The very
+    same crop/pad is applied to both volumes of a pair (they share one grid), so relative
+    alignment is preserved while every batch stays collatable despite the handful of
+    subjects with a non-standard field of view.
+
+    Subjects are sampled uniformly at random forever, so the stream never exhausts and
+    ``train_epoch`` can consume a fixed number of steps per epoch.
     """
 
-    def __init__(self, device: str = 'cpu') -> None:
+    FIXED_PATTERN = '*postcontrast*.nii*'
+    MOVING_CANDIDATES = ('resampled_to_fixed.nii.gz', 'resampled_to_fixed.nii')
+
+    def __init__(
+        self,
+        root: str = str(DEFAULT_DATA_ROOT),
+        target_shape: Sequence[int] | str | None = 'auto',
+        normalize: bool = True,
+        seed: int | None = None,
+    ) -> None:
         """
         Parameters
         ----------
-        device : str
-            Device to place tensors on.
+        root : str
+            Path to the remind-nifti dataset root.
+        target_shape : sequence of int, 'auto', or None
+            Volume shape every sample is center cropped/padded to. 'auto' picks the most
+            common shape in the dataset and pads each dimension up to a multiple of
+            ``SHAPE_MULTIPLE`` (32) so the default UNet can consume every volume; None
+            keeps native shapes (then all volumes in a batch must already share a shape).
+        normalize : bool
+            If True, min-max normalize each volume to [0, 1].
+        seed : int or None
+            Optional base RNG seed for reproducible sampling (offset per worker).
         """
-        self.teramedical_root = Path('/autofs/cluster/dalcalab1/data/teramedical/processed')
-        self.device = device
-        self.oasis_path = self.teramedical_root / 'OASIS/neurite/proc-v1.0'
-        self._get_vol_paths()
+        self.root = Path(root)
+        self.normalize = normalize
+        self.seed = seed
+        self.pairs, skipped = self._discover_pairs()
+
+        if not self.pairs:
+            raise FileNotFoundError(f'No complete ReMIND pairs found under {self.root}')
+        if skipped:
+            print(f'ReMINDDataset: skipped {len(skipped)} subject(s): {", ".join(skipped)}')
+
+        if target_shape == 'auto':
+            target_shape = Counter(pair.shape for pair in self.pairs).most_common(1)[0][0]
+            # Pad up (never crop anatomy away) to the next UNet-compatible size.
+            target_shape = tuple(-(-s // SHAPE_MULTIPLE) * SHAPE_MULTIPLE for s in target_shape)
+        self.target_shape = tuple(target_shape) if target_shape is not None else None
+        print(
+            f'ReMINDDataset: {len(self.pairs)} pairs from {self.root} '
+            f'(target_shape={self.target_shape or "native"})'
+        )
 
     def __iter__(self):
         """
-        Generate infinite stream of random volume pairs.
+        Generate an infinite stream of randomly sampled registration pairs.
 
         Yields
         ------
         dict
-            A dictionary containing the source and target volumes.
+            ``source`` (moving, Preop) and ``target`` (fixed, Intraop) volumes as
+            (1, D, H, W) float tensors, plus the ``subject`` id for traceability.
         """
+        worker_info = get_worker_info()
+        worker_id = worker_info.id if worker_info is not None else 0
+        num_workers = worker_info.num_workers if worker_info is not None else 1
+        pairs = self.pairs[worker_id::num_workers]
+        if not pairs:
+            raise RuntimeError(f'worker {worker_id}/{num_workers} received no ReMIND pairs')
+
+        rng = np.random.default_rng(None if self.seed is None else self.seed + worker_id)
         while True:
-            idx1, idx2 = np.random.randint(0, len(self.folder_abspaths), size=2)
+            pair = pairs[rng.integers(len(pairs))]
+            yield {
+                'source': self._load(pair.moving),
+                'target': self._load(pair.fixed),
+                'subject': pair.subject,
+            }
 
-            # Get paths
-            source_path = self.folder_abspaths[idx1]
-            target_path = self.folder_abspaths[idx2]
-
-            # Get niftis
-            source_nii = nib.load(f'{source_path}/vol_norm_aligned.nii.gz')
-            target_nii = nib.load(f'{target_path}/vol_norm_aligned.nii.gz')
-
-            source = torch.from_numpy(source_nii.get_fdata()).float().unsqueeze(0)
-            target = torch.from_numpy(target_nii.get_fdata()).float().unsqueeze(0)
-
-            yield {'source': source, 'target': target}
-
-    def _get_vol_paths(self) -> None:
+    def _discover_pairs(self) -> tuple[list[_ReMINDPair], list[str]]:
         """
-        Get the absolute paths of the volume folders.
+        Locate complete fixed/moving pairs, validating that each pair shares a shape.
+
+        Returns
+        -------
+        (pairs, skipped) : tuple
+            The discovered pairs and human-readable reasons for skipped subjects.
         """
-        self.folder_abspaths = []
+        pairs = []
+        skipped = []
 
-        for i in range(1, 450):
-            folder = self.oasis_path / f'OASIS_OAS1_{i:04}_MR1'
+        if not self.root.is_dir():
+            raise FileNotFoundError(f'ReMIND dataset root not found: {self.root}')
 
-            if folder.exists():
-                self.folder_abspaths.append(folder)
+        for subject_dir in sorted(self.root.glob('ReMIND-*')):
+            if not subject_dir.is_dir():
+                continue
+
+            fixed = self._first_match(subject_dir / 'Intraop', self.FIXED_PATTERN)
+            moving = None
+            for candidate in self.MOVING_CANDIDATES:
+                moving = self._first_match(subject_dir / 'Preop', candidate)
+                if moving is not None:
+                    break
+
+            if fixed is None or moving is None:
+                missing = 'Intraop postcontrast' if fixed is None else 'Preop resampled_to_fixed'
+                skipped.append(f'{subject_dir.name} (missing {missing})')
+                continue
+
+            fixed_shape = nib.load(str(fixed)).shape
+            moving_shape = nib.load(str(moving)).shape
+            if fixed_shape != moving_shape:
+                skipped.append(f'{subject_dir.name} (shape {fixed_shape} != {moving_shape})')
+                continue
+
+            pairs.append(_ReMINDPair(subject_dir.name, fixed, moving, tuple(fixed_shape)))
+
+        return pairs, skipped
+
+    @staticmethod
+    def _first_match(folder: Path, pattern: str) -> Path | None:
+        """Return the first sorted file in ``folder`` matching ``pattern``, or None."""
+        if not folder.is_dir():
+            return None
+        matches = sorted(folder.glob(pattern))
+        return matches[0] if matches else None
+
+    def _load(self, path: Path) -> torch.Tensor:
+        """Load one NIfTI volume as a normalized (1, D, H, W) float tensor."""
+        volume = nib.load(str(path)).get_fdata(dtype=np.float32)
+
+        if self.normalize:
+            vmin = float(volume.min())
+            vmax = float(volume.max())
+            if vmax > vmin:
+                volume = (volume - vmin) / (vmax - vmin)
+
+        if self.target_shape is not None:
+            volume = self._fit_shape(volume)
+
+        return torch.from_numpy(np.ascontiguousarray(volume)).unsqueeze(0)
+
+    def _fit_shape(self, volume: np.ndarray) -> np.ndarray:
+        """Center crop (or zero-pad) a volume to ``target_shape``."""
+        if volume.ndim != len(self.target_shape):
+            raise ValueError(f'volume is {volume.ndim}D but target_shape is {self.target_shape}')
+
+        slices = []
+        padding = []
+        for current, desired in zip(volume.shape, self.target_shape):
+            if current >= desired:
+                start = (current - desired) // 2
+                slices.append(slice(start, start + desired))
+                padding.append((0, 0))
+            else:
+                slices.append(slice(None))
+                padding.append((0, desired - current))
+
+        volume = volume[tuple(slices)]
+        return np.pad(volume, padding) if any(pad != (0, 0) for pad in padding) else volume
 
 
 def train_epoch(
@@ -164,8 +307,20 @@ def train_epoch(
     return total_loss / steps_per_epoch
 
 
+def parse_shape(value: str) -> Sequence[int] | str | None:
+    """
+    Parse a --shape argument: 'auto', 'none', or a comma-separated D,H,W triple.
+    """
+    value = value.strip().lower()
+    if value == 'auto':
+        return 'auto'
+    if value in ('none', 'off'):
+        return None
+    return tuple(int(v) for v in value.split(','))
+
+
 def main():
-    parser = argparse.ArgumentParser(description='Train 3D VoxelMorph on OASIS data')
+    parser = argparse.ArgumentParser(description='Train 3D VoxelMorph on ReMIND data')
     parser.add_argument('--output-dir', type=str, default='output', help='Output directory')
     parser.add_argument('--epochs', type=int, default=100_000, help='Number of epochs')
     parser.add_argument('--workers', type=int, default=0, help='Number of workers')
@@ -175,6 +330,18 @@ def main():
     parser.add_argument('--lambda', type=float, dest='lambda_param', default=0.01)
     parser.add_argument('--gpu', type=str, default='0', help='GPU ID')
     parser.add_argument('--save-every', type=int, default=10, help='Checkpoint every N epochs')
+    parser.add_argument(
+        '--data-root',
+        type=str,
+        default=str(DEFAULT_DATA_ROOT),
+        help='Path to the remind-nifti dataset root',
+    )
+    parser.add_argument(
+        '--shape',
+        type=str,
+        default='auto',
+        help="Target volume shape: 'auto' (most common), 'none', or D,H,W like 256,256,176",
+    )
     args = parser.parse_args()
 
     # Set device
@@ -197,7 +364,7 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     # Create dataloader
-    train_dataset = VxmIterableDataset(device=device)
+    train_dataset = ReMINDDataset(root=args.data_root, target_shape=parse_shape(args.shape))
     train_loader = iter(
         DataLoader(
             train_dataset,
