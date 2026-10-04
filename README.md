@@ -25,3 +25,39 @@ Python package from the source checkout:
 ```bash
 pip install -e voxelmorph
 ```
+
+## Web application — surgical planning suite
+
+`webapp/` is the full planning application:
+
+1. **Upload** the intraoperative scan (fixed) and preoperative scan (moving), plus an
+   optional preoperative tumour mask (`.nii` / `.nii.gz`).
+2. **Pipeline** — tumour segmentation (pluggable), VoxelMorph registration with the
+   trained `voxelmorph/final.pt` checkpoint, deformation-field extraction, and tumour
+   relocation (preop → affine-aligned → post-shift positions, shift in mm, Jacobian QC).
+3. **Visualization** — in-browser multi-plane slice viewer with tumour contours,
+   centroid markers, deformation heatmap and checkerboard QC, metrics cards, a 3D
+   rendering of the preoperative vs. current tumour, and a one-click **3D Slicer
+   bundle** (NIfTI volumes, masks, 3-component displacement field, metrics, plan).
+4. **Planning (Cline SDK)** — enter the initial preoperative plan; every coordinate is
+   mapped through the measured deformation field and an updated navigation plan is
+   generated (deterministic engine always works offline; set `ANTHROPIC_API_KEY` to
+   enable Claude-authored narratives and free-form chat).
+
+### Run
+
+```bash
+cd webapp
+python -m uvicorn server:app --host 127.0.0.1 --port 8000
+# open http://127.0.0.1:8000
+```
+
+Dependencies: `pip install fastapi uvicorn python-multipart` (all already installed in
+this environment), plus the `voxelmorph` package from the previous section.
+
+### Segmentation model (to be provided)
+
+Place the trained model at **`webapp/segmentation_model.pt`** — the pipeline detects it
+automatically (TorchScript `torch.jit.save`, or `torch.save` of a module that maps a
+normalized `(1, 1, D, H, W)` volume to logits). Until then the UI clearly labels the
+**demo engine** (intensity heuristic) or accepts a clinician-provided mask.

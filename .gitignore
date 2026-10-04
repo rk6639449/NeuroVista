@@ -20,3 +20,6 @@ Thumbs.db
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Web app session data (uploaded cases, exports)
+webapp/work/

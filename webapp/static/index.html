@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NeuroVista · Surgical Planning</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">NV</div>
+      <div>
+        <div class="brand-title">NeuroVista</div>
+        <div class="brand-sub">Brain-Shift Surgical Planning Suite</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <span class="pill" id="segModelPill" title="Segmentation model status">segmentation: …</span>
+      <span class="pill" id="weightsPill">weights: …</span>
+      <span class="pill session" id="sessionPill">session: connecting…</span>
+    </div>
+  </header>
+
+  <nav class="stepper" id="stepper">
+    <button class="step active" data-step="1"><span class="step-no">1</span>Case upload</button>
+    <button class="step" data-step="2"><span class="step-no">2</span>Pipeline</button>
+    <button class="step" data-step="3"><span class="step-no">3</span>Visualization</button>
+    <button class="step" data-step="4"><span class="step-no">4</span>Planning · Cline SDK</button>
+  </nav>
+
+  <main>
+    <!-- ============================ STEP 1 ============================ -->
+    <section class="panel active" id="panel-1">
+      <div class="panel-head">
+        <h1>Upload the case</h1>
+        <p>Provide the <b>intraoperative</b> scan (fixed — defines the target grid) and the
+           <b>preoperative</b> scan (moving — warped by VoxelMorph). NIfTI (.nii / .nii.gz).</p>
+      </div>
+
+      <div class="drop-grid">
+        <label class="drop" id="dropFixed">
+          <input type="file" accept=".nii,.nii.gz" hidden />
+          <div class="drop-icon">◈</div>
+          <div class="drop-title">Fixed image — Intraop</div>
+          <div class="drop-sub">Target grid · postcontrast T1</div>
+          <div class="drop-file" data-file>Drag &amp; drop or click to browse</div>
+          <div class="drop-ok" hidden>✓ uploaded</div>
+        </label>
+
+        <label class="drop" id="dropMoving">
+          <input type="file" accept=".nii,.nii.gz" hidden />
+          <div class="drop-icon">◆</div>
+          <div class="drop-title">Moving image — Preoperative</div>
+          <div class="drop-sub">Warped onto the fixed grid · source anatomy</div>
+          <div class="drop-file" data-file>Drag &amp; drop or click to browse</div>
+          <div class="drop-ok" hidden>✓ uploaded</div>
+        </label>
+
+        <label class="drop secondary" id="dropMask">
+          <input type="file" accept=".nii,.nii.gz" hidden />
+          <div class="drop-icon">◍</div>
+          <div class="drop-title">Tumour mask <span class="opt">optional</span></div>
+          <div class="drop-sub">Preoperative space · otherwise segmentation runs automatically</div>
+          <div class="drop-file" data-file>Drag &amp; drop or click to browse</div>
+          <div class="drop-ok" hidden>✓ uploaded</div>
+        </label>
+      </div>
+
+      <div class="panel-actions">
+        <div class="hint" id="uploadHint">Both scans are required to continue.</div>
+        <button class="btn primary" id="toStep2" disabled>Continue to pipeline →</button>
+      </div>
+    </section>
+
+    <!-- ============================ STEP 2 ============================ -->
+    <section class="panel" id="panel-2">
+      <div class="panel-head">
+        <h1>Processing pipeline</h1>
+        <p>Segment the tumour → register preoperative to intraoperative with the trained
+           VoxelMorph model → recover the deformation field → relocate the tumour.</p>
+      </div>
+
+      <div class="stage-grid">
+        <article class="stage" id="stageSegment">
+          <header><span class="stage-no">01</span>
+            <span class="badge" id="badgeSegment">pending</span></header>
+          <h3>Tumour segmentation</h3>
+          <p>Detects the tumour on the preoperative scan.
+             <span id="segEngineNote">Model not provided yet — demo engine active.</span></p>
+          <button class="btn" data-run="segment">Run segmentation</button>
+        </article>
+
+        <article class="stage" id="stageRegister">
+          <header><span class="stage-no">02</span>
+            <span class="badge" id="badgeRegister">pending</span></header>
+          <h3>VoxelMorph registration</h3>
+          <p>Warps the moving image onto the fixed grid with <code>final.pt</code>
+             and yields the deformation field.</p>
+          <button class="btn" data-run="register">Run registration</button>
+        </article>
+
+        <article class="stage" id="stageRelocate">
+          <header><span class="stage-no">03</span>
+            <span class="badge" id="badgeRelocate">pending</span></header>
+          <h3>Tumour relocation</h3>
+          <p>Propagates the tumour mask through the field: where the tumour is
+             <i>now</i> and how far it shifted.</p>
+          <button class="btn" data-run="relocate">Compute shift</button>
+        </article>
+      </div>
+
+      <div class="panel-actions">
+        <button class="btn ghost" id="backTo1">← Back</button>
+        <div class="hint" id="pipelineHint">Run all three stages — or use the fast path:</div>
+        <button class="btn primary" id="runAll">▶ Run full pipeline</button>
+        <button class="btn" id="toStep3" disabled>Open visualization →</button>
+      </div>
+
+      <div class="console" id="console"><div class="console-line dim">Ready. Waiting for commands…</div></div>
+    </section>
+    <!-- ============================ STEP 3 ============================ -->
+    <section class="panel" id="panel-3">
+      <div class="panel-head">
+        <h1>Visualization</h1>
+        <p>Slice viewer with tumour contours, centroid markers, deformation heatmap —
+           plus the 3D shifted-tumour rendering and the 3D Slicer export.</p>
+      </div>
+
+      <div class="viz-layout">
+        <div class="viz-toolbar">
+          <div class="chip-group" id="baseChips">
+            <span class="chip-label">Base</span>
+            <button class="chip active" data-base="fixed">Fixed</button>
+            <button class="chip" data-base="moving">Moving</button>
+            <button class="chip" data-base="resampled">Resampled</button>
+            <button class="chip" data-base="warped">Warped</button>
+            <button class="chip" data-base="flow">Flow heat</button>
+            <button class="chip" data-base="checker">Checker</button>
+          </div>
+          <div class="chip-group" id="ovlChips">
+            <span class="chip-label">Overlays</span>
+            <button class="chip ovl" data-ovl="ovl_pre">Preop mask</button>
+            <button class="chip ovl" data-ovl="ovl_affine">Affine-aligned</button>
+            <button class="chip ovl active" data-ovl="ovl_now">Current tumour</button>
+          </div>
+          <div class="chip-group" id="planeChips">
+            <span class="chip-label">Plane</span>
+            <button class="chip active" data-plane="axial">Axial</button>
+            <button class="chip" data-plane="coronal">Coronal</button>
+            <button class="chip" data-plane="sagittal">Sagittal</button>
+          </div>
+        </div>
+
+        <div class="viewport-wrap">
+          <div class="viewport" id="viewport">
+            <canvas id="cvBase"></canvas>
+            <canvas id="cvOvl1" class="ovl-cv"></canvas>
+            <canvas id="cvOvl2" class="ovl-cv"></canvas>
+            <canvas id="cvOvl3" class="ovl-cv"></canvas>
+            <div class="ori ori-t" id="oriTop">A</div>
+            <div class="ori ori-b" id="oriBottom">P</div>
+            <div class="ori ori-l" id="oriLeft">L</div>
+            <div class="ori ori-r" id="oriRight">R</div>
+            <div class="vp-badge" id="vpBadge">—</div>
+            <div class="vp-loading" id="vpLoading" hidden>loading…</div>
+          </div>
+          <div class="slice-ctrl">
+            <button class="btn icon" id="slicePrev">−</button>
+            <input type="range" id="sliceRange" min="0" max="175" value="88" />
+            <button class="btn icon" id="sliceNext">+</button>
+            <span class="slice-readout" id="sliceReadout">— / —</span>
+          </div>
+        </div>
+
+        <aside class="viz-side">
+          <div class="side-card">
+            <h4>Tumour position <span class="mini">(RAS mm)</span></h4>
+            <table class="pos-table" id="posTable">
+              <tr class="dim"><td colspan="3">Run the pipeline to see results.</td></tr>
+            </table>
+          </div>
+          <div class="side-card">
+            <h4>Display</h4>
+            <label class="slider-row">Brightness
+              <input type="range" id="bright" min="40" max="180" value="100" /></label>
+            <label class="slider-row">Contrast
+              <input type="range" id="contrast" min="40" max="220" value="100" /></label>
+          </div>
+          <div class="side-card slicer-card">
+            <h4>3D Slicer</h4>
+            <p class="mini">Full-fidelity review: volumes, masks, deformation field and the
+               updated plan as NIfTI — drag into <a href="https://slicer.org" target="_blank"
+               rel="noopener">3D Slicer</a>.</p>
+            <a class="btn primary block" id="exportBtn" href="#" download>⬇ Download Slicer bundle</a>
+          </div>
+        </aside>
+      </div>
+      <div class="metric-grid" id="metricGrid">
+        <div class="metric"><span class="m-label">Brain shift</span>
+          <span class="m-value" id="mShift">—</span><span class="m-unit" id="mShiftDir"></span></div>
+        <div class="metric"><span class="m-label">Tumour volume</span>
+          <span class="m-value" id="mVolume">—</span><span class="m-unit">cc</span></div>
+        <div class="metric"><span class="m-label">Registration NCC</span>
+          <span class="m-value" id="mNcc">—</span><span class="m-unit"></span></div>
+        <div class="metric"><span class="m-label">Field p95</span>
+          <span class="m-value" id="mP95">—</span><span class="m-unit">mm</span></div>
+        <div class="metric"><span class="m-label">Jacobian ≤ 0</span>
+          <span class="m-value" id="mJac">—</span><span class="m-unit">%</span></div>
+        <div class="metric"><span class="m-label">Registration time</span>
+          <span class="m-value" id="mTime">—</span><span class="m-unit">s</span></div>
+      </div>
+
+      <div class="panel-actions">
+        <button class="btn ghost" id="backTo2">← Pipeline</button>
+        <div class="hint"></div>
+        <button class="btn primary" id="toStep4">Open planning · Cline SDK →</button>
+      </div>
+
+      <article class="stage three-d">
+        <header><span class="stage-no">3D</span><span class="badge">shifted tumour</span></header>
+        <h3>Preoperative vs. current tumour location</h3>
+        <div class="three-wrap">
+          <canvas id="threeCanvas"></canvas>
+          <div class="three-fallback" id="threeFallback" hidden>
+            3D renderer unavailable (offline). The slice viewer and the 3D Slicer bundle
+            show the same tumour geometry.
+          </div>
+        </div>
+        <div class="legend">
+          <span class="lg"><i class="sw sw-green"></i>Preoperative tumour</span>
+          <span class="lg"><i class="sw sw-red"></i>Current (post-shift) tumour</span>
+          <label class="lg"><input type="checkbox" id="autoRotate" checked /> auto-rotate</label>
+        </div>
+      </article>
+    </section>
+
+    <!-- ============================ STEP 4 ============================ -->
+    <section class="panel" id="panel-4">
+      <div class="panel-head">
+        <h1>Surgical planning <span class="engine-badge" id="engineBadge">Cline SDK</span></h1>
+        <p>Enter the initial preoperative plan. Every coordinate is mapped through the
+           measured deformation field and returned as an updated navigation plan.</p>
+      </div>
+
+      <div class="plan-layout">
+        <div class="plan-left">
+          <article class="side-card">
+            <h4>Planned coordinates <span class="mini">(preop, RAS mm)</span></h4>
+            <table class="points-table" id="pointsTable">
+              <thead><tr><th>Label</th><th>X</th><th>Y</th><th>Z</th><th></th></tr></thead>
+              <tbody></tbody>
+            </table>
+            <button class="btn ghost small" id="addPoint">+ Add point</button>
+          </article>
+
+          <article class="side-card">
+            <h4>Initial plan steps</h4>
+            <textarea id="planSteps" rows="5"
+              placeholder="One step per line, e.g.&#10;Right frontal craniotomy, 4 cm"></textarea>
+          </article>
+
+          <article class="side-card">
+            <h4>Surgeon notes</h4>
+            <textarea id="planNotes" rows="3" placeholder="Free-text notes from planning…"></textarea>
+          </article>
+
+          <button class="btn primary block" id="updatePlan">↻ Update plan with measured shift</button>
+        </div>
+
+        <div class="plan-right">
+          <article class="side-card grow">
+            <h4>Updated plan <span class="mini" id="planMeta"></span></h4>
+            <pre class="plan-out" id="planOut">Run the pipeline, enter plan points, then press
+“Update plan with measured shift”. The document appears
+here and inside the 3D Slicer bundle.</pre>
+          </article>
+
+          <article class="side-card chat-card">
+            <h4>Ask Cline <span class="mini">case-aware assistant</span></h4>
+            <div class="chat-log" id="chatLog">
+              <div class="msg bot">Ask me anything about this case — shift, deformation
+                quality, updated coordinates…</div>
+            </div>
+            <form class="chat-form" id="chatForm">
+              <input type="text" id="chatInput" placeholder="e.g. How much did the tumour shift?"
+                     autocomplete="off" />
+              <button class="btn primary" type="submit">Ask</button>
+            </form>
+          </article>
+        </div>
+      </div>
+
+      <div class="panel-actions">
+        <button class="btn ghost" id="backTo3">← Visualization</button>
+        <div class="hint"></div>
+        <a class="btn" id="exportBtn2" href="#" download>⬇ 3D Slicer bundle</a>
+      </div>
+    </section>
+  </main>
+
+  <div class="toasts" id="toasts"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
