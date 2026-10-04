@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "voxelmorph"
+version = "0.3.3"
+description = "Unsupervised Learning for Image Registration."
+requires-python = ">=3.8"
+readme = "README.md"
+license = { text = "MIT" }
+classifiers = [
+  "Intended Audience :: Science/Research",
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent"
+]
+authors = [
+  { name = "Adrian V. Dalca" },
+  { name = "Malte Hoffmann" },
+  { name = "Andrew Hoopes" }
+]
+dependencies = [
+  "torch",
+  "scikit-image",
+  "packaging",
+  "numpy",
+  "scipy",
+  "nibabel",
+  "h5py",
+  "neurite>=0.3",
+]
+keywords = [
+  "python",
+  "pytorch",
+  "medical-imaging",
+  "registration",
+  "medical-image-computing",
+]
+
+[project.urls]
+GitHub = "https://github.com/voxelmorph/voxelmorph"
+PyPI = "https://pypi.org/project/voxelmorph/"

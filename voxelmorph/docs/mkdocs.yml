@@ -1,0 +1,94 @@
+site_name: 'Voxelmorph: Unsupervised Learning for Image Registration'
+site_description: >
+  Voxelmorph is a deep learning library for unsupervised medical image
+  registration, with PyTorch and TensorFlow backends for layers, models, and
+  utilities.
+site_author: Adrian V. Dalca (DalcaLab @ HMS and MIT)
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/voxelmorph/voxelmorph
+nav:
+  - Home: index.md
+  - API:
+    - nn:
+      - nn: api/nn/nn.md
+      - nn.functional: api/nn/functional.md
+      - nn.losses: api/nn/losses.md
+      - nn.models: api/nn/models.md
+      - nn.modules: api/nn/modules.md
+    - py:
+      - py: api/py/py.md
+      - py.generators: api/py/generators.md
+      - py.utils: api/py/utils.md
+
+# theme: readthedocs
+theme:
+  # logo: assets/logo.png
+  # favicon: images/favicon.png
+  name: material
+  palette:
+
+    # Palette toggle for light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to dark mode
+
+    # Palette toggle for dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/weather-night
+        name: Switch to light mode
+
+# theme: material
+extra_css:
+  - stylesheets/extra.css
+
+plugins:
+  - search
+  - autorefs
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [.]
+          options:
+            docstring_style: numpy
+            docstring_section_style: spacy
+            merge_init_into_class: true
+            show_signature: true
+            show_signature_annotations: true
+            show_root_toc_entry: true
+            separate_signature: true
+            members_order: alphabetical
+            show_source: true
+            show_root_heading: true
+            filters:
+              - "!^forward$"
+### Markdown stuff
+markdown_extensions:
+  - admonition
+  - toc:
+      toc_depth: 3
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
