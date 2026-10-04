@@ -56,6 +56,30 @@ def direction_phrase(vec: np.ndarray) -> str:
     return 'minimal'
 
 
+def hd95(a: np.ndarray, b: np.ndarray, zooms) -> float | None:
+    """
+    Symmetric 95th-percentile Hausdorff distance (mm) between two masks.
+
+    Landmark-free TRE proxy: how far the relocated tumour surface sits from the
+    intraoperative residual surface.
+    """
+    from scipy.ndimage import binary_erosion, distance_transform_edt
+
+    if not a.any() or not b.any():
+        return None
+    surf_a = a & ~binary_erosion(a)
+    surf_b = b & ~binary_erosion(b)
+    if not surf_a.any():
+        surf_a = a
+    if not surf_b.any():
+        surf_b = b
+    sampling = tuple(float(z) for z in zooms)
+    d_to_b = distance_transform_edt(~b, sampling=sampling)
+    d_to_a = distance_transform_edt(~a, sampling=sampling)
+    return float(max(np.percentile(d_to_b[surf_a], 95),
+                     np.percentile(d_to_a[surf_b], 95)))
+
+
 def relocate(mask_moving: np.ndarray, disp: np.ndarray, moving_affine: np.ndarray,
              fixed_affine: np.ndarray, moving_zooms: tuple, mask_affine_aligned: np.ndarray,
              mask_shifted: np.ndarray) -> dict:

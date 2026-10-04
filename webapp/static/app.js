@@ -273,7 +273,7 @@ async function fetchImage(kind) {
   }
   const bmp = await createImageBitmap(await res.blob());
   state.imgCache.set(key, bmp);
-  if (state.imgCache.size > 360) {
+  if (state.imgCache.size > 480) {
     state.imgCache.delete(state.imgCache.keys().next().value);
   }
   return bmp;
@@ -289,29 +289,43 @@ function drawInto(canvas, img, fitBase) {
   ctx.drawImage(img, 0, 0, w, h);
 }
 
+/* Overlays live on different voxel grids than some bases.  Drawing a
+   moving-grid mask (ovl_pre) stretched over a fixed-grid base misplaces it
+   visually — filter to compatible pairs instead. */
+function compatibleOverlays() {
+  const movingBase = state.view.base === 'moving';
+  return ['ovl_pre', 'ovl_affine', 'ovl_now', 'ovl_gt']
+    .filter((k) => state.view.ovls.has(k) &&
+      (movingBase ? k === 'ovl_pre' : k !== 'ovl_pre'));
+}
+
+let renderSeq = 0;
+
 async function renderView() {
+  const seq = ++renderSeq;
   const loading = $('#vpLoading');
   loading.hidden = false;
   try {
     const base = await fetchImage(state.view.base);
+    if (seq !== renderSeq) return; // a newer render superseded this one
     drawInto($('#cvBase'), base);
-    const overlayOrder = ['ovl_pre', 'ovl_affine', 'ovl_now', 'ovl_gt']
-      .filter((k) => state.view.ovls.has(k));
+    const overlayOrder = compatibleOverlays();
     const canvases = [$('#cvOvl1'), $('#cvOvl2'), $('#cvOvl3')];
     canvases.forEach((c) => {
       c.getContext('2d').clearRect(0, 0, c.width, c.height);
     });
-    for (let i = 0; i < overlayOrder.length; i++) {
-      try {
-        const ovl = await fetchImage(overlayOrder[i]);
-        drawInto(canvases[i], ovl, base);
-      } catch (_) { /* overlay not ready — silently skip */ }
-    }
+    const ovls = await Promise.all(
+      overlayOrder.map((k) => fetchImage(k).catch(() => null)));
+    if (seq !== renderSeq) return;
+    ovls.forEach((ovl, i) => {
+      if (ovl) drawInto(canvases[i], ovl, base);
+    });
     $('#vpBadge').textContent =
       `${state.view.base} · ${state.view.plane} · #${state.view.idx}`;
     updateOrientation();
     renderWipe();
   } catch (err) {
+    if (seq !== renderSeq) return;
     $('#vpBadge').textContent = 'unavailable';
     if (!renderView._warned) {
       toast(err.message, 'err');
@@ -319,7 +333,7 @@ async function renderView() {
       setTimeout(() => { renderView._warned = false; }, 8000);
     }
   } finally {
-    loading.hidden = true;
+    if (seq === renderSeq) loading.hidden = true;
   }
 }
 
@@ -338,11 +352,19 @@ function planeMax() {
   return dims[PLANE_AXIS[state.view.plane]] - 1;
 }
 
+let sliceRaf = 0;
+
 function setSlice(idx) {
   state.view.idx = Math.max(0, Math.min(planeMax(), idx));
   $('#sliceRange').value = state.view.idx;
   $('#sliceReadout').textContent = `${state.view.idx} / ${planeMax()}`;
-  renderView();
+  // Coalesce rapid slider drags to one render per animation frame; renderView's
+  // sequence guard drops any fetches that finish out of order.
+  if (sliceRaf) return;
+  sliceRaf = requestAnimationFrame(() => {
+    sliceRaf = 0;
+    renderView();
+  });
 }
 
 function enterVisualization() {
@@ -778,8 +800,11 @@ function updateShowcase(m) {
   if (gtOn && m.gt.dice != null) {
     $('#mDiceCard').hidden = false;
     animateNum($('#mDice'), m.gt.dice * 100, 1);
-    $('#mDiceSub').textContent = m.gt.distance_mm != null
-      ? `centroid dist ${m.gt.distance_mm.toFixed(1)} mm` : 'residual overlap';
+    const parts = [];
+    if (m.gt.distance_mm != null) parts.push(`dist ${m.gt.distance_mm.toFixed(1)}`);
+    if (m.gt.hd95 != null) parts.push(`HD95 ${m.gt.hd95.toFixed(1)}`);
+    $('#mDiceSub').textContent = parts.length
+      ? `${parts.join(' · ')} mm` : 'residual overlap';
     if (!state.view.ovls.has('ovl_gt')) {
       state.view.ovls.add('ovl_gt');
       $('#ovlGtChip').classList.add('active');

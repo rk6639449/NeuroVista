@@ -104,16 +104,67 @@ def find_dataset_mask(patient: str, moving_series: str) -> tuple:
     return best_path, (best_key[1] if best_key else 0)
 
 
-def load_dataset_mask(path, moving_shape, moving_affine) -> np.ndarray:
-    """World-resample a dataset mask onto the moving image's voxel grid."""
+def load_dataset_mask(path, moving_shape, moving_affine,
+                      ref_image=None) -> np.ndarray:
+    """Place a dataset mask on the moving image's grid (see ``mask_to_grid``)."""
+    return mask_to_grid(path, moving_shape, moving_affine, ref_image)
+
+
+def _enhancement_rank(image: np.ndarray, mask: np.ndarray) -> float:
+    """Fraction of masked voxels brighter than the median brain voxel."""
+    if not mask.any():
+        return 0.0
+    image = np.asarray(image, dtype=np.float32)
+    brain = image[image > np.percentile(image[image > 0], 25)]
+    if brain.size == 0 or not np.isfinite(brain).any():
+        return 0.0
+    return float((image[mask] > np.median(brain)).mean())
+
+
+def mask_to_grid(path, shape, affine, ref_image=None) -> np.ndarray:
+    """
+    Place a ``masks_test`` mask on the target image grid (order 0).
+
+    The masks in ``masks_test`` disagree with the image affines about the
+    anterior-posterior direction (images report ``(R,A,I)``, masks report
+    ``(R,P,I)``), and the inconsistency differs per patient: for some masks only
+    the stored affine is wrong (voxels were rasterized on the reference grid),
+    for others the voxel array itself is A-P flipped while the stored world
+    position is right.  Resampling with the stored affine therefore marks the
+    wrong anatomy for a subset of masks.
+
+    Resolution: build BOTH candidate placements — the stored-affine world
+    mapping and the flip-corrected one (``stored @ YFLIP``) — and keep the one
+    that covers brighter tissue on the reference image (tumour masks are drawn
+    on contrast-enhanced scans, so the true placement scores higher).  Ties
+    (within 0.05) keep the stored-affine placement, which is the world position
+    documented in ``all_masks_index.csv``.  Without a reference image the
+    stored-affine placement is returned unchanged (backwards compatible).
+    """
     from nibabel.processing import resample_from_to
 
-    img = nib.load(str(path))
-    if img.shape == tuple(moving_shape) and \
-            np.allclose(img.affine, moving_affine, atol=1e-2):
-        return np.asanyarray(img.dataobj) > 0
-    out = resample_from_to(img, (tuple(moving_shape), moving_affine), order=0)
-    return out.get_fdata() > 0.5
+    src = nib.load(str(path))
+    target = (tuple(shape), np.asarray(affine))
+    stored = resample_from_to(src, target, order=0).get_fdata() > 0.5
+    if ref_image is None:
+        return stored
+
+    flip = np.eye(4)
+    flip[1, 1] = -1.0
+    flip[1, 3] = src.shape[1] - 1
+    corrected = nib.Nifti1Image(np.asanyarray(src.dataobj), src.affine @ flip)
+    alt = resample_from_to(corrected, target, order=0).get_fdata() > 0.5
+
+    if not stored.any() or not alt.any():
+        return stored if stored.any() else alt
+    if alt.sum() != stored.sum():
+        # Order-0 world resampling must preserve the count; a mismatch means one
+        # candidate fell partly off the grid — keep the fuller one.
+        return stored if stored.sum() > alt.sum() else alt
+
+    r_stored = _enhancement_rank(ref_image, stored)
+    r_alt = _enhancement_rank(ref_image, alt)
+    return alt if r_alt > r_stored + 0.05 else stored
 
 
 def find_gt_mask(patient: str, fixed_series: str):

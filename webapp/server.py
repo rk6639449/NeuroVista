@@ -148,6 +148,8 @@ def _sync_masks(sess: Session) -> None:
         inter = int(np.logical_and(sess.mask_now, sess.gt_mask).sum())
         denom = int(sess.mask_now.sum()) + int(sess.gt_mask.sum())
         sess.reloc['dice_vs_gt'] = float(2 * inter / denom) if denom else None
+        sess.reloc['hd95_vs_gt_mm'] = rel.hd95(
+            sess.mask_now, sess.gt_mask, sess.fixed.zooms)
         try:
             gt_vox = rel.centroid_voxel(sess.gt_mask)
             sess.reloc['gt_centroid_mm'] = \
@@ -313,6 +315,7 @@ def metrics(sid: str) -> dict:
                     'volume_cc': sess.mask_cc},
         'gt': {'present': sess.gt_mask is not None, 'name': sess.gt_name,
                'dice': (sess.reloc or {}).get('dice_vs_gt'),
+               'hd95': (sess.reloc or {}).get('hd95_vs_gt_mm'),
                'centroid_mm': (sess.reloc or {}).get('gt_centroid_mm'),
                'distance_mm': (sess.reloc or {}).get('gt_distance_mm')},
         'reg': {'resolution_factor': reg.reg_resolution(sess.fixed.shape)[0]
@@ -485,15 +488,14 @@ def load_sample(sid: str, payload: dict) -> dict:
         sess.patient = match['patient']
         if match['mask_path']:
             sess.dataset_mask = seg.load_dataset_mask(
-                match['mask_path'], sess.moving.shape, sess.moving.affine)
+                match['mask_path'], sess.moving.shape, sess.moving.affine,
+                ref_image=sess.moving.data)
         if match['gt_path']:
-            gt_vol = pp.Volume.load(match['gt_path'])
-            if gt_vol.shape == sess.fixed.shape and \
-                    np.allclose(gt_vol.affine, sess.fixed.affine, atol=1e-2):
-                sess.gt_mask = gt_vol.data > 0
-            else:
-                sess.gt_mask = pp.resample_to_grid(
-                    gt_vol, sess.fixed.shape, sess.fixed.affine, order=0) > 0.5
+            # Placed by seg.mask_to_grid's stored-vs-flip arbitration, scored
+            # against the intraoperative image itself.
+            sess.gt_mask = seg.mask_to_grid(
+                match['gt_path'], sess.fixed.shape, sess.fixed.affine,
+                ref_image=sess.fixed.data)
             sess.gt_name = Path(match['gt_path']).name
 
         mask_cc = None
