@@ -1,0 +1,213 @@
+@import 'tailwindcss';
+
+/* ------------------------------------------------------------------ */
+/* NeuroVista design tokens                                            */
+/* ------------------------------------------------------------------ */
+@theme {
+  --font-sans:
+    'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Surfaces — deep, low-glare reading-room greys */
+  --color-void: #05070b;
+  --color-panel: #090d14;
+  --color-panel-2: #0d121b;
+  --color-card: #111722;
+  --color-card-2: #161d2a;
+  --color-line: #1c2432;
+  --color-line-2: #263041;
+
+  /* Text */
+  --color-mist: #e9eef7;
+  --color-mist-2: #a7b2c4;
+  --color-mist-3: #6b7789;
+
+  /* Accents */
+  --color-scan: #35dfd0; /* primary — teal/cyan imaging accent */
+  --color-scan-2: #17b3a8;
+  --color-ai: #8b8cf8; /* NeuroVista AI violet */
+  --color-ember: #f5a524; /* US fusion overlay amber */
+  --color-good: #34d399;
+  --color-warn: #fbbf24;
+  --color-bad: #f87171;
+  --color-fixed: #38bdf8; /* fixed/moving modality keylines */
+  --color-moving: #fb923c;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-void);
+    color: var(--color-mist);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow: hidden;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--color-scan) 32%, transparent);
+    color: #fff;
+  }
+
+  *:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--color-scan) 70%, transparent);
+    outline-offset: 1px;
+  }
+}
+
+@layer utilities {
+  /* Thin, unobtrusive scrollbars for dense clinical panels */
+  .scroll-slim {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line-2) transparent;
+  }
+  .scroll-slim::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .scroll-slim::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scroll-slim::-webkit-scrollbar-thumb {
+    background: var(--color-line-2);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  .scroll-slim::-webkit-scrollbar-thumb:hover {
+    background: #33405a;
+    background-clip: content-box;
+  }
+
+  /* Faint blueprint grid used behind the viewer stage */
+  .stage-grid {
+    background-image:
+      linear-gradient(to right, rgba(53, 223, 208, 0.045) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(53, 223, 208, 0.045) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+
+  .panel-noise {
+    background-image: radial-gradient(
+      120% 90% at 50% 0%,
+      rgba(53, 223, 208, 0.05) 0%,
+      transparent 60%
+    );
+  }
+
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Range slider — track fill is driven by the --fill custom property */
+  .nv-range {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 4px;
+    border-radius: 999px;
+    background: linear-gradient(
+      to right,
+      var(--color-scan) 0%,
+      var(--color-scan) var(--fill, 50%),
+      var(--color-line-2) var(--fill, 50%),
+      var(--color-line-2) 100%
+    );
+    cursor: pointer;
+  }
+  .nv-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 13px;
+    height: 13px;
+    border-radius: 999px;
+    background: #eafffd;
+    border: 2px solid var(--color-scan);
+    box-shadow: 0 0 0 3px rgba(53, 223, 208, 0.15);
+    transition: box-shadow 0.15s ease;
+  }
+  .nv-range::-webkit-slider-thumb:hover {
+    box-shadow: 0 0 0 5px rgba(53, 223, 208, 0.22);
+  }
+  .nv-range::-moz-range-thumb {
+    width: 11px;
+    height: 11px;
+    border-radius: 999px;
+    background: #eafffd;
+    border: 2px solid var(--color-scan);
+    box-shadow: 0 0 0 3px rgba(53, 223, 208, 0.15);
+  }
+  .nv-range::-moz-range-track {
+    height: 4px;
+    border-radius: 999px;
+    background: var(--color-line-2);
+  }
+  .nv-range::-moz-range-progress {
+    height: 4px;
+    border-radius: 999px;
+    background: var(--color-scan);
+  }
+
+  @keyframes nv-pulse {
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.45;
+      transform: scale(0.82);
+    }
+  }
+  .animate-nv-pulse {
+    animation: nv-pulse 1.4s ease-in-out infinite;
+  }
+
+  @keyframes nv-sweep {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(220%);
+    }
+  }
+  .animate-nv-sweep {
+    animation: nv-sweep 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+
+  @keyframes nv-rise {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .animate-nv-rise {
+    animation: nv-rise 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  @keyframes nv-blink-caret {
+    0%,
+    100% {
+      opacity: 0.2;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+  .animate-nv-caret {
+    animation: nv-blink-caret 1s ease-in-out infinite;
+  }
+}

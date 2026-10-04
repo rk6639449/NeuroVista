@@ -53,201 +53,157 @@ import neurite as ne
 
 # Local imports
 import voxelmorph as vxm
-
-
-DEFAULT_DATA_ROOT = Path(__file__).resolve().parents[2] / 'remind-nifti'
-
-# VxmPairwise's default 5-level UNet downsamples 5 times, so every spatial dimension must
-# be a multiple of 2 ** 5 = 32 or the decoder's skip connections will not line up.
-SHAPE_MULTIPLE = 32
-
-
-class _ReMINDPair(NamedTuple):
-    """A single subject's (fixed, moving) volume paths on a shared voxel grid."""
-
-    subject: str
-    fixed: Path   # Intraop postcontrast T1 -- defines the target grid
-    moving: Path  # Preop T1 already resampled onto the fixed grid
-    shape: tuple  # common (D, H, W) shape of both volumes
-
+import glob
+from pathlib import Path
+import nibabel as nib
+import numpy as np
+import torch.nn.functional as F
+from torch.utils.data import IterableDataset, get_worker_info
 
 class ReMINDDataset(IterableDataset):
-    """
-    Infinite PyTorch IterableDataset over ReMIND preop/intraop registration pairs.
-
-    For each ``ReMIND-*`` subject folder under ``root`` this dataset yields:
-
-    - ``target`` (fixed image): the intraoperative postcontrast T1 volume,
-      ``<subject>/Intraop/*postcontrast*.nii[.gz]``.
-    - ``source`` (moving image): the preoperative T1 already resampled onto the fixed grid
-      by ``Preprocessing/Resampling.py``, ``<subject>/Preop/resampled_to_fixed.nii[.gz]``.
-
-    Volumes are min-max normalized to [0, 1], given a leading channel dimension, and --
-    unless ``target_shape`` is None -- center cropped/padded to ``target_shape``. The very
-    same crop/pad is applied to both volumes of a pair (they share one grid), so relative
-    alignment is preserved while every batch stays collatable despite the handful of
-    subjects with a non-standard field of view.
-
-    Subjects are sampled uniformly at random forever, so the stream never exhausts and
-    ``train_epoch`` can consume a fixed number of steps per epoch.
-    """
-
-    FIXED_PATTERN = '*postcontrast*.nii*'
-    MOVING_CANDIDATES = ('resampled_to_fixed.nii.gz', 'resampled_to_fixed.nii')
+    """PyTorch IterableDataset for paired Preop (moving) and Intraop (fixed) brain scans from the ReMIND dataset."""
 
     def __init__(
         self,
-        root: str = str(DEFAULT_DATA_ROOT),
-        target_shape: Sequence[int] | str | None = 'auto',
+        data_dir: str | Path,
         normalize: bool = True,
-        seed: int | None = None,
+        target_shape: tuple[int, int, int] = (160, 192, 160),
+        pairs: list[dict[str, Path]] | None = None,   # NEW
     ) -> None:
-        """
-        Parameters
-        ----------
-        root : str
-            Path to the remind-nifti dataset root.
-        target_shape : sequence of int, 'auto', or None
-            Volume shape every sample is center cropped/padded to. 'auto' picks the most
-            common shape in the dataset and pads each dimension up to a multiple of
-            ``SHAPE_MULTIPLE`` (32) so the default UNet can consume every volume; None
-            keeps native shapes (then all volumes in a batch must already share a shape).
-        normalize : bool
-            If True, min-max normalize each volume to [0, 1].
-        seed : int or None
-            Optional base RNG seed for reproducible sampling (offset per worker).
-        """
-        self.root = Path(root)
+        super().__init__()
+        self.data_dir = Path(data_dir)
         self.normalize = normalize
-        self.seed = seed
-        self.pairs, skipped = self._discover_pairs()
+        self.target_shape = target_shape
+
+        # If pairs are passed in (e.g. from a split), use them directly.
+        # Otherwise fall back to scanning data_dir as before.
+        self.pairs = pairs if pairs is not None else self._find_pairs()
 
         if not self.pairs:
-            raise FileNotFoundError(f'No complete ReMIND pairs found under {self.root}')
-        if skipped:
-            print(f'ReMINDDataset: skipped {len(skipped)} subject(s): {", ".join(skipped)}')
+            raise RuntimeError(f'No valid Preop/Intraop pairs found in {self.data_dir}')
 
-        if target_shape == 'auto':
-            target_shape = Counter(pair.shape for pair in self.pairs).most_common(1)[0][0]
-            # Pad up (never crop anatomy away) to the next UNet-compatible size.
-            target_shape = tuple(-(-s // SHAPE_MULTIPLE) * SHAPE_MULTIPLE for s in target_shape)
-        self.target_shape = tuple(target_shape) if target_shape is not None else None
-        print(
-            f'ReMINDDataset: {len(self.pairs)} pairs from {self.root} '
-            f'(target_shape={self.target_shape or "native"})'
-        )
+        print(f'Dataset initialized with {len(self.pairs)} subject pairs.')
 
-    def __iter__(self):
-        """
-        Generate an infinite stream of randomly sampled registration pairs.
-
-        Yields
-        ------
-        dict
-            ``source`` (moving, Preop) and ``target`` (fixed, Intraop) volumes as
-            (1, D, H, W) float tensors, plus the ``subject`` id for traceability.
-        """
-        worker_info = get_worker_info()
-        worker_id = worker_info.id if worker_info is not None else 0
-        num_workers = worker_info.num_workers if worker_info is not None else 1
-        pairs = self.pairs[worker_id::num_workers]
-        if not pairs:
-            raise RuntimeError(f'worker {worker_id}/{num_workers} received no ReMIND pairs')
-
-        rng = np.random.default_rng(None if self.seed is None else self.seed + worker_id)
-        while True:
-            pair = pairs[rng.integers(len(pairs))]
-            yield {
-                'source': self._load(pair.moving),
-                'target': self._load(pair.fixed),
-                'subject': pair.subject,
-            }
-
-    def _discover_pairs(self) -> tuple[list[_ReMINDPair], list[str]]:
-        """
-        Locate complete fixed/moving pairs, validating that each pair shares a shape.
-
-        Returns
-        -------
-        (pairs, skipped) : tuple
-            The discovered pairs and human-readable reasons for skipped subjects.
-        """
+    def _find_pairs(self) -> list[dict[str, Path]]:
         pairs = []
-        skipped = []
+        subject_dirs = sorted([d for d in self.data_dir.iterdir() if d.is_dir() and d.name.startswith('ReMIND')])
 
-        if not self.root.is_dir():
-            raise FileNotFoundError(f'ReMIND dataset root not found: {self.root}')
+        for subj in subject_dirs:
+            intraop_dir = subj / 'Intraop'
+            preop_dir = subj / 'Preop'
 
-        for subject_dir in sorted(self.root.glob('ReMIND-*')):
-            if not subject_dir.is_dir():
-                continue
+            intraop_files = list(intraop_dir.glob('*.nii.gz')) if intraop_dir.exists() else []
+            preop_files = list(preop_dir.glob('*.nii.gz')) if preop_dir.exists() else []
 
-            fixed = self._first_match(subject_dir / 'Intraop', self.FIXED_PATTERN)
-            moving = None
-            for candidate in self.MOVING_CANDIDATES:
-                moving = self._first_match(subject_dir / 'Preop', candidate)
-                if moving is not None:
-                    break
+            if intraop_files and preop_files:
+                pairs.append({
+                    'fixed_path': intraop_files[0],
+                    'moving_path': preop_files[0],
+                    'subject_id': subj.name
+                })
 
-            if fixed is None or moving is None:
-                missing = 'Intraop postcontrast' if fixed is None else 'Preop resampled_to_fixed'
-                skipped.append(f'{subject_dir.name} (missing {missing})')
-                continue
+        return pairs
 
-            fixed_shape = nib.load(str(fixed)).shape
-            moving_shape = nib.load(str(moving)).shape
-            if fixed_shape != moving_shape:
-                skipped.append(f'{subject_dir.name} (shape {fixed_shape} != {moving_shape})')
-                continue
+    def _pad_or_crop(self, tensor: torch.Tensor) -> torch.Tensor:
+        """Pads or crops 3D tensor shape (1, H, W, D) to self.target_shape."""
+        curr_shape = tensor.shape[1:]
+        pad_dims = []
 
-            pairs.append(_ReMINDPair(subject_dir.name, fixed, moving, tuple(fixed_shape)))
+        for curr, target in zip(reversed(curr_shape), reversed(self.target_shape)):
+            diff = target - curr
+            if diff > 0:
+                pad_before = diff // 2
+                pad_after = diff - pad_before
+                pad_dims.extend([pad_before, pad_after])
+            else:
+                pad_dims.extend([0, 0])
 
-        return pairs, skipped
+        if any(p > 0 for p in pad_dims):
+            tensor = F.pad(tensor.unsqueeze(0), pad_dims, mode='constant', value=0).squeeze(0)
 
-    @staticmethod
-    def _first_match(folder: Path, pattern: str) -> Path | None:
-        """Return the first sorted file in ``folder`` matching ``pattern``, or None."""
-        if not folder.is_dir():
-            return None
-        matches = sorted(folder.glob(pattern))
-        return matches[0] if matches else None
+        # Crop if larger
+        h, w, d = tensor.shape[1:]
+        th, tw, td = self.target_shape
+        sh = (h - th) // 2
+        sw = (w - tw) // 2
+        sd = (d - td) // 2
 
-    def _load(self, path: Path) -> torch.Tensor:
-        """Load one NIfTI volume as a normalized (1, D, H, W) float tensor."""
-        volume = nib.load(str(path)).get_fdata(dtype=np.float32)
+        return tensor[:, sh:sh + th, sw:sw + tw, sd:sd + td]
+
+    def _load_and_preprocess(self, path: Path) -> torch.Tensor:
+        nii = nib.load(str(path))
+        data = nii.get_fdata().astype(np.float32)
 
         if self.normalize:
-            vmin = float(volume.min())
-            vmax = float(volume.max())
-            if vmax > vmin:
-                volume = (volume - vmin) / (vmax - vmin)
+            min_val, max_val = data.min(), data.max()
+            if max_val > min_val:
+                data = (data - min_val) / (max_val - min_val)
 
-        if self.target_shape is not None:
-            volume = self._fit_shape(volume)
+        tensor = torch.from_numpy(data).unsqueeze(0)  # (1, H, W, D)
+        return self._pad_or_crop(tensor)
 
-        return torch.from_numpy(np.ascontiguousarray(volume)).unsqueeze(0)
+    def __iter__(self):
+        worker_info = get_worker_info()
 
-    def _fit_shape(self, volume: np.ndarray) -> np.ndarray:
-        """Center crop (or zero-pad) a volume to ``target_shape``."""
-        if volume.ndim != len(self.target_shape):
-            raise ValueError(f'volume is {volume.ndim}D but target_shape is {self.target_shape}')
+        # Partition pairs across workers to prevent duplicate processing
+        if worker_info is None:
+            worker_pairs = self.pairs
+        else:
+            # Seed worker rng independently
+            np.random.seed(worker_info.seed % (2**32))
+            per_worker = int(np.ceil(len(self.pairs) / float(worker_info.num_workers)))
+            iter_start = worker_info.id * per_worker
+            iter_end = min(iter_start + per_worker, len(self.pairs))
+            worker_pairs = self.pairs[iter_start:iter_end]
 
-        slices = []
-        padding = []
-        for current, desired in zip(volume.shape, self.target_shape):
-            if current >= desired:
-                start = (current - desired) // 2
-                slices.append(slice(start, start + desired))
-                padding.append((0, 0))
-            else:
-                slices.append(slice(None))
-                padding.append((0, desired - current))
+        while True:
+            idx = np.random.randint(0, len(worker_pairs))
+            pair = worker_pairs[idx]
 
-        volume = volume[tuple(slices)]
-        return np.pad(volume, padding) if any(pad != (0, 0) for pad in padding) else volume
+            moving = self._load_and_preprocess(pair['moving_path'])
+            fixed = self._load_and_preprocess(pair['fixed_path'])
 
+            yield {'source': moving, 'target': fixed, 'subject': pair['subject_id']}
+def split_pairs(data_dir: str | Path, test_frac: float = 0.2, seed: int = 42):
+    """
+    Scans data_dir once and returns (train_pairs, test_pairs) split by subject,
+    so no subject appears in both sets.
+    """
+    data_dir = Path(data_dir)
+    subject_dirs = sorted([d for d in data_dir.iterdir() if d.is_dir() and d.name.startswith('ReMIND')])
+
+    pairs = []
+    for subj in subject_dirs:
+        intraop_dir = subj / 'Intraop'
+        preop_dir = subj / 'Preop'
+
+        intraop_files = list(intraop_dir.glob('*.nii.gz')) if intraop_dir.exists() else []
+        preop_files = list(preop_dir.glob('*.nii.gz')) if preop_dir.exists() else []
+
+        if intraop_files and preop_files:
+            pairs.append({
+                'fixed_path': intraop_files[0],
+                'moving_path': preop_files[0],
+                'subject_id': subj.name
+            })
+
+    if not pairs:
+        raise RuntimeError(f'No valid Preop/Intraop pairs found in {data_dir}')
+
+    rng = np.random.default_rng(seed)
+    indices = rng.permutation(len(pairs))
+
+    n_test = max(1, int(round(len(pairs) * test_frac)))
+    test_idx = set(indices[:n_test])
+
+    train_pairs = [p for i, p in enumerate(pairs) if i not in test_idx]
+    test_pairs = [p for i, p in enumerate(pairs) if i in test_idx]
+
+    print(f'Split {len(pairs)} subjects -> {len(train_pairs)} train / {len(test_pairs)} test')
+    return train_pairs, test_pairs
 
 def train_epoch(
+        
     model: nn.Module,
     dataloader: torch.utils.data.DataLoader,
     optimizer: torch.optim.Optimizer,
@@ -276,17 +232,20 @@ def train_epoch(
         The weights for the image and gradient losses.
     steps_per_epoch : int
     """
-
+    
     model.train()
     total_loss = 0.0
 
     for _ in range(steps_per_epoch):
+        
         batch = next(dataloader)
+        
         optimizer.zero_grad()
-
+        
         # Move to device in training loop (not dataloader/dataset!)
         source = batch['source'].to(device)
         target = batch['target'].to(device)
+        
 
         # Get the displacement and the warped source image from the model
         displacement, warped_source = model(
@@ -303,7 +262,6 @@ def train_epoch(
         loss.backward()
         optimizer.step()
         total_loss += loss.item()
-
     return total_loss / steps_per_epoch
 
 
@@ -322,13 +280,13 @@ def parse_shape(value: str) -> Sequence[int] | str | None:
 def main():
     parser = argparse.ArgumentParser(description='Train 3D VoxelMorph on ReMIND data')
     parser.add_argument('--output-dir', type=str, default='output', help='Output directory')
-    parser.add_argument('--epochs', type=int, default=100_000, help='Number of epochs')
+    parser.add_argument('--epochs', type=int, default=100, help='Number of epochs')
     parser.add_argument('--workers', type=int, default=0, help='Number of workers')
     parser.add_argument('--steps-per-epoch', type=int, default=100, help='Steps per epoch')
     parser.add_argument('--batch-size', type=int, default=4, help='Batch size')
     parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate')
     parser.add_argument('--lambda', type=float, dest='lambda_param', default=0.01)
-    parser.add_argument('--gpu', type=str, default='0', help='GPU ID')
+    parser.add_argument('--gpu', type=str, default='1', help='GPU ID')
     parser.add_argument('--save-every', type=int, default=10, help='Checkpoint every N epochs')
     parser.add_argument(
         '--data-root',
@@ -363,8 +321,13 @@ def main():
     loss_weights = [1.0, args.lambda_param]
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
-    # Create dataloader
-    train_dataset = ReMINDDataset(root=args.data_root, target_shape=parse_shape(args.shape))
+    # Create dataset and dataloader
+    dataset_path = 'dataset_2'
+    train_pairs, test_pairs = split_pairs(dataset_path, test_frac=0.2, seed=42)
+
+    train_dataset = ReMINDDataset(data_dir=dataset_path, normalize=True, pairs=train_pairs)
+    test_dataset = ReMINDDataset(data_dir=dataset_path, normalize=True, pairs=test_pairs)
+
     train_loader = iter(
         DataLoader(
             train_dataset,
@@ -372,7 +335,13 @@ def main():
             num_workers=args.workers,
         )
     )
-
+    test_loader = iter(
+        DataLoader(
+            test_dataset,
+            batch_size=args.batch_size,
+            num_workers=args.workers,
+        )
+    )
     # Create output directory
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
